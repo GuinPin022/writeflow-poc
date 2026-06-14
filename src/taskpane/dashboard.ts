@@ -1,6 +1,6 @@
 import { DailyStore } from "../tracking/dailyStore";
 
-/* global document, HTMLElement, HTMLInputElement, window */
+/* global document, HTMLElement, HTMLInputElement, window, Blob, URL */
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -263,6 +263,10 @@ export function renderSettingsView(
 
       <div class="dash-section-label">Données</div>
       <div class="actions">
+        <button id="set-export">Exporter pour le dashboard web</button>
+      </div>
+      <p class="hint">Télécharge un fichier JSON à charger dans le tableau de bord web WriteFlow. 100 % local, rien n'est envoyé.</p>
+      <div class="actions" style="margin-top:8px">
         <button id="set-reset" class="danger">Réinitialiser l'historique</button>
       </div>
       <p class="hint">Efface l'historique local de tous les documents et les objectifs. Sans effet sur tes fichiers Word.</p>
@@ -281,10 +285,31 @@ export function renderSettingsView(
   t?.addEventListener("change", () => {
     if (docId) store.setDocTarget(docId, Math.max(0, parseInt(t.value, 10) || 0));
   });
+  container.querySelector("#set-export")?.addEventListener("click", () => exportForWebDashboard());
   container.querySelector("#set-reset")?.addEventListener("click", () => {
     if (window.confirm("Effacer tout l'historique local et les objectifs ?")) {
       store.clear();
       renderSettingsView(container, store, currentDoc);
     }
   });
+}
+
+/**
+ * Exporte les données agrégées (writeflow_v2 + writeflow_goals) en un fichier JSON
+ * téléchargeable, lisible par le tableau de bord web WriteFlow.
+ * Format : { app, version, exportedAt, state, goals }. Tout reste local.
+ */
+function exportForWebDashboard(): void {
+  const state = JSON.parse(window.localStorage.getItem("writeflow_v2") || '{"docs":{}}');
+  const goals = JSON.parse(window.localStorage.getItem("writeflow_goals") || "null");
+  const payload = { app: "writeflow", version: 2, exportedAt: new Date().toISOString(), state, goals };
+  const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `writeflow-export-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

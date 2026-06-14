@@ -43,6 +43,8 @@ module.exports = async (env, options) => {
         patterns: [
           { from: "manifest.xml", to: "[name][ext]" },
           { from: "assets", to: "assets" },
+          // Tableau de bord web statique, deploye sur le meme site GitHub Pages.
+          { from: "dashboard.html", to: "[name][ext]" },
         ],
       }),
     ],

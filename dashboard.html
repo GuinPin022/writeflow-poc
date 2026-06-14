@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WriteFlow — Tableau de bord</title>
+<style>
+  :root{
+    --accent:#1D9E75; --accent-strong:#0F6E56;
+    --blue:#378ADD; --amber:#BA7517; --coral:#D85A30; --purple:#534AB7;
+    --ink:#1f2328; --muted:#5f6b76; --hint:#8a949e;
+    --line:#e6e8eb; --bg:#f4f5f7; --card:#ffffff; --soft:#eef0f2;
+    --cal0:#eef0f2; --cal1:#9FE1CB; --cal2:#5DCAA5; --cal3:#1D9E75; --cal4:#0F6E56;
+    --shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#e8eaed; --muted:#9aa3ad; --hint:#6b747d;
+      --line:#2a2f36; --bg:#16191d; --card:#1e2228; --soft:#23272e;
+      --cal0:#23272e; --cal1:#0F6E56; --cal2:#15856a; --cal3:#1D9E75; --cal4:#5DCAA5;
+      --shadow:0 1px 3px rgba(0,0,0,.3);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1040px;margin:0 auto;padding:24px 20px 48px;}
+
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;}
+  .brand b{font-size:19px;font-weight:700;}
+  .brand .tag{font-size:12px;color:var(--muted);display:block;margin-top:-2px;}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px;}
+  .pill.demo{color:var(--amber);background:rgba(186,117,23,.12);}
+  .pill.real{color:var(--accent-strong);background:rgba(29,158,117,.14);}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor;}
+  .btn{font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:8px;padding:7px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+  .btn.primary{border-color:var(--accent);color:#fff;background:var(--accent);}
+  .btn:hover{filter:brightness(.98);}
+
+  .grid{display:grid;gap:14px;}
+  .row-hero{grid-template-columns:1.3fr 1fr 1fr 1fr;}
+  .row-2{grid-template-columns:1fr 1fr;}
+  @media(max-width:880px){.row-hero{grid-template-columns:1fr 1fr;}.row-2{grid-template-columns:1fr;}}
+  @media(max-width:560px){.row-hero{grid-template-columns:1fr;}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);}
+  .card h2{font-size:14px;font-weight:700;margin:0 0 14px;display:flex;align-items:center;justify-content:space-between;}
+  .card h2 .meta{font-size:12px;font-weight:600;color:var(--hint);}
+
+  .hero{display:flex;align-items:center;gap:16px;}
+  .ring{position:relative;width:84px;height:84px;flex:none;}
+  .ring svg{transform:rotate(-90deg);}
+  .ring .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .ring .val b{font-size:19px;line-height:1;}
+  .ring .val small{font-size:10px;color:var(--hint);}
+  .hero-meta .big{font-size:27px;font-weight:700;line-height:1.05;}
+  .hero-meta .sub{font-size:12px;color:var(--muted);margin-top:3px;}
+  .hero-meta .rest{font-size:12px;font-weight:600;color:var(--accent-strong);margin-top:4px;}
+
+  .stat{display:flex;flex-direction:column;justify-content:center;}
+  .stat .lab{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+  .stat .num{font-size:26px;font-weight:700;margin-top:6px;line-height:1;}
+  .stat .sub{font-size:11px;color:var(--hint);margin-top:4px;}
+  .ic{font-style:normal;}
+
+  .cal{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,1fr);gap:3px;overflow-x:auto;padding-bottom:2px;}
+  .cal .c{width:11px;height:11px;border-radius:2px;background:var(--cal0);}
+  .legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--hint);margin-top:11px;justify-content:flex-end;}
+  .legend i{width:11px;height:11px;border-radius:2px;display:inline-block;font-style:normal;}
+  .months{display:flex;justify-content:space-between;font-size:10px;color:var(--hint);margin-bottom:5px;padding:0 1px;}
+
+  .bars{display:flex;align-items:flex-end;gap:5px;height:120px;}
+  .bars .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:5px;min-width:0;}
+  .bars .bar{width:100%;border-radius:3px 3px 0 0;background:var(--cal2);}
+  .bars .bar.today{background:var(--accent-strong);}
+  .bars .bar.empty{background:var(--soft);}
+  .bars .d{font-size:9px;color:var(--hint);white-space:nowrap;}
+
+  .proj{margin-bottom:15px;}
+  .proj:last-child{margin-bottom:0;}
+  .proj .pl{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:6px;gap:8px;}
+  .proj .pl .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .proj .pl .ct{color:var(--muted);font-size:12px;flex:none;}
+  .track{height:8px;background:var(--soft);border-radius:5px;overflow:hidden;}
+  .track .fill{height:100%;background:var(--accent);border-radius:5px;}
+  .proj .eta{font-size:11px;color:var(--hint);margin-top:5px;display:flex;align-items:center;gap:5px;}
+  .empty-note{font-size:12px;color:var(--hint);text-align:center;padding:18px 0;}
+
+  .badges{display:flex;flex-wrap:wrap;gap:9px;}
+  .badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;background:var(--soft);
+    padding:7px 13px;border-radius:20px;}
+  .badge.locked{opacity:.42;}
+  .badge .bi{font-size:14px;font-style:normal;}
+
+  footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--line);
+    font-size:11px;color:var(--hint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  .drop{outline:2px dashed var(--accent);outline-offset:-6px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+
+  <header class="top">
+    <div class="brand">
+      <div class="logo">W</div>
+      <div><b>WriteFlow</b><span class="tag">Le suivi de ta production d'écriture</span></div>
+    </div>
+    <div class="toolbar">
+      <span class="pill demo" id="src"><span class="dot"></span>données de démonstration</span>
+      <button class="btn primary" id="import-btn">Importer mon export…</button>
+      <button class="btn" id="reset-btn">Démo</button>
+      <input type="file" id="file" accept=".json,.csv" style="display:none">
+    </div>
+  </header>
+
+  <div class="grid row-hero" style="margin-bottom:14px;">
+    <div class="card hero">
+      <div class="ring">
+        <svg width="84" height="84" viewBox="0 0 84 84">
+          <circle cx="42" cy="42" r="34" fill="none" stroke="var(--soft)" stroke-width="9"/>
+          <circle id="ring-fg" cx="42" cy="42" r="34" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6"/>
+        </svg>
+        <div class="val"><b id="ring-pct">0%</b><small>objectif</small></div>
+      </div>
+      <div class="hero-meta">
+        <div class="big" id="today-words">0</div>
+        <div class="sub">mots aujourd'hui · cible <span id="goal-val">1000</span></div>
+        <div class="rest" id="today-rest"></div>
+      </div>
+    </div>
+    <div class="card stat">
+      <div class="lab"><i class="ic" style="color:var(--coral)">▲</i> Série actuelle</div>
+      <div class="num" id="streak">0 j</div>
+      <div class="sub" id="streak-rec">record : 0 j</div>
+    </div>
+    <div class="card stat">
+      <div class="lab"><i class="ic">▦</i> Cette semaine</div>
+      <div class="num" id="week-words">0</div>
+      <div class="sub" id="week-avg">moy. 0 / jour</div>
+    </div>
+    <div class="card stat">
+      <div class="lab"><i class="ic" style="color:var(--purple)">★</i> Meilleur jour</div>
+      <div class="num" id="best-day">0</div>
+      <div class="sub" id="total-words">total : 0 mots</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h2>Activité des 12 derniers mois <span class="meta" id="cal-total">0 mots</span></h2>
+    <div class="months" id="months"></div>
+    <div class="cal" id="cal"></div>
+    <div class="legend">moins
+      <i style="background:var(--cal0)"></i><i style="background:var(--cal1)"></i>
+      <i style="background:var(--cal2)"></i><i style="background:var(--cal3)"></i>
+      <i style="background:var(--cal4)"></i>plus
+    </div>
+  </div>
+
+  <div class="grid row-2" style="margin-bottom:14px;">
+    <div class="card">
+      <h2>Mots par jour <span class="meta">14 derniers jours</span></h2>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card">
+      <h2>Projets <span class="meta" id="proj-count"></span></h2>
+      <div id="projects"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Badges &amp; records</h2>
+    <div class="badges" id="badges"></div>
+  </div>
+
+  <footer>
+    <span>100&nbsp;% hors ligne · aucune donnée envoyée sur un serveur</span>
+    <span id="foot-version">v0.1 · <span id="foot-note">charge un export du plugin pour voir tes chiffres</span></span>
+  </footer>
+
+</div>
+
+<script>
+/* =========================================================================
+   WriteFlow — tableau de bord web statique
+   Source de vérité : export JSON du plugin Word (writeflow_v2 + writeflow_goals).
+   Aucune dépendance, aucun réseau. Tout est calculé localement.
+   ========================================================================= */
+var DASH_VERSION = "0.1";
+var STORE_KEY = "writeflow_dash";   /* cache propre à CE dashboard */
+var MONTHS_FR = ["jan","fév","mar","avr","mai","juin","juil","août","sep","oct","nov","déc"];
+var DOW_FR = ["dim","lun","mar","mer","jeu","ven","sam"];
+
+function fmt(n){ return (Math.round(n)||0).toLocaleString('fr-FR'); }
+function dkey(d){ var m=('0'+(d.getMonth()+1)).slice(-2),da=('0'+d.getDate()).slice(-2); return d.getFullYear()+'-'+m+'-'+da; }
+function parseKey(k){ return new Date(k+'T12:00:00'); }
+
+/* ---------- modèle interne ----------
+   model = {
+     real: bool,
+     goals: { daily, weekly },
+     docs: [ { name, daily:{date:words}, target, current } ],
+     totalDaily: { date: words }   // agrégé tous docs
+   }
+*/
+
+function buildModel(state, goals, real){
+  var docsObj = (state && state.docs) ? state.docs : {};
+  var docs = [], totalDaily = {};
+  Object.keys(docsObj).forEach(function(id){
+    var d = docsObj[id] || {};
+    var daily = d.daily || {};
+    var sum = 0;
+    Object.keys(daily).forEach(function(k){
+      var v = Number(daily[k])||0;
+      daily[k] = v;
+      sum += v;
+      totalDaily[k] = (totalDaily[k]||0) + v;
+    });
+    docs.push({
+      name: d.name || id,
+      daily: daily,
+      target: Number(d.target)||0,
+      current: (d.lastCount!=null ? Number(d.lastCount) : sum),
+      produced: sum
+    });
+  });
+  return {
+    real: !!real,
+    goals: { daily: (goals&&goals.daily)||1000, weekly: (goals&&goals.weekly)||0 },
+    docs: docs,
+    totalDaily: totalDaily
+  };
+}
+
+/* ---------- données de démonstration ---------- */
+function demoModel(){
+  var daily={}, today=new Date();
+  for(var i=364;i>=0;i--){
+    var day=new Date(today); day.setDate(today.getDate()-i);
+    var wd=day.getDay();
+    var base = (wd===0||wd===6)? 300 : 1100;          // moins le week-end
+    var r=Math.random();
+    var v = r<0.18 ? 0 : Math.round(base*(0.4+Math.random()*1.5));
+    if(i<13 && i>0 && r<0.25) v=0;
+    daily[dkey(day)] = v;
+  }
+  daily[dkey(today)] = 1230;
+  var state={ docs:{
+    d1:{ name:"Roman — « Les Marées »", daily:daily, target:100000, lastCount:72000 },
+    d2:{ name:"Newsletter mensuelle", daily:{}, target:4000, lastCount:3200 }
+  }};
+  /* répartit ~30% de la prod sur le 2e doc pour l'exemple */
+  Object.keys(daily).forEach(function(k){ if(Math.random()<0.3){ state.docs.d2.daily[k]=Math.round(daily[k]*0.3); } });
+  return buildModel(state, {daily:1500,weekly:7500}, false);
+}
+
+/* ---------- calculs ---------- */
+function totalProduced(m){ var s=0; for(var k in m.totalDaily) s+=m.totalDaily[k]; return s; }
+
+function currentStreak(m){
+  var g=m.goals.daily, d=new Date(), s=0;
+  /* si aujourd'hui n'atteint pas encore l'objectif, on démarre la veille (jour en cours) */
+  if((m.totalDaily[dkey(d)]||0) < g){ d.setDate(d.getDate()-1); }
+  while((m.totalDaily[dkey(d)]||0) >= g){ s++; d.setDate(d.getDate()-1); }
+  return s;
+}
+function recordStreak(m){
+  var g=m.goals.daily, keys=Object.keys(m.totalDaily).sort(), best=0, cur=0, prev=null;
+  keys.forEach(function(k){
+    if((m.totalDaily[k]||0) < g){ cur=0; prev=k; return; }
+    if(prev!==null){
+      var gap=(parseKey(k)-parseKey(prev))/86400000;
+      cur = (gap===1)? cur+1 : 1;
+    } else cur=1;
+    if(cur>best) best=cur;
+    prev=k;
+  });
+  return best;
+}
+function windowSum(m,n){
+  var s=0,d=new Date();
+  for(var i=0;i<n;i++){ s+=(m.totalDaily[dkey(d)]||0); d.setDate(d.getDate()-1); }
+  return s;
+}
+function bestDay(m){ var b=0; for(var k in m.totalDaily) if(m.totalDaily[k]>b) b=m.totalDaily[k]; return b; }
+function bestWeekday(m){
+  var sum=[0,0,0,0,0,0,0], cnt=[0,0,0,0,0,0,0];
+  for(var k in m.totalDaily){ var wd=parseKey(k).getDay(); sum[wd]+=m.totalDaily[k]; cnt[wd]++; }
+  var bi=-1,bv=-1;
+  for(var i=0;i<7;i++){ var avg=cnt[i]?sum[i]/cnt[i]:0; if(avg>bv){bv=avg;bi=i;} }
+  return bi>=0?{day:bi,avg:bv}:null;
+}
+/* ETA d'un projet : (cible - courant) / vitesse moyenne récente sur ce doc */
+function projectEta(doc){
+  if(!doc.target || doc.current>=doc.target) return null;
+  var d=new Date(), sum=0, days=0;
+  for(var i=0;i<30;i++){ var v=doc.daily[dkey(d)]; if(v!=null){ sum+=v; if(v>0) days++; } d.setDate(d.getDate()-1); }
+  /* vitesse = moyenne sur les jours réellement écrits (sinon trop pessimiste) */
+  var speed = days? sum/days : 0;
+  if(speed<=0) return null;
+  return Math.ceil((doc.target-doc.current)/speed);
+}
+
+/* ---------- rendu ---------- */
+function render(m){
+  var g=m.goals.daily;
+  var today=m.totalDaily[dkey(new Date())]||0;
+
+  /* source */
+  var src=document.getElementById('src');
+  if(m.real){ src.className='pill real'; src.innerHTML='<span class="dot"></span>données réelles · à jour'; document.getElementById('foot-note').textContent='source : export du plugin Word'; }
+  else{ src.className='pill demo'; src.innerHTML='<span class="dot"></span>données de démonstration'; document.getElementById('foot-note').textContent='charge un export du plugin pour voir tes chiffres'; }
+
+  /* anneau objectif */
+  var pct=g?Math.min(100,Math.round(today/g*100)):0, circ=213.6;
+  var fg=document.getElementById('ring-fg');
+  fg.style.strokeDashoffset=circ*(1-pct/100);
+  fg.setAttribute('stroke', pct>=100?'var(--accent-strong)':'var(--accent)');
+  document.getElementById('ring-pct').textContent=pct+'%';
+  document.getElementById('today-words').textContent=fmt(today);
+  document.getElementById('goal-val').textContent=fmt(g);
+  document.getElementById('today-rest').textContent = today>=g ? '✓ objectif atteint' : (fmt(g-today)+' mots restants');
+
+  /* stats */
+  var cs=currentStreak(m), rs=recordStreak(m);
+  document.getElementById('streak').textContent=cs+' j';
+  document.getElementById('streak-rec').textContent='record : '+rs+' j';
+  var week=windowSum(m,7);
+  document.getElementById('week-words').textContent=fmt(week);
+  document.getElementById('week-avg').textContent='moy. '+fmt(week/7)+' / jour';
+  document.getElementById('best-day').textContent=fmt(bestDay(m));
+  var tot=totalProduced(m);
+  document.getElementById('total-words').textContent='total : '+fmt(tot)+' mots';
+  document.getElementById('cal-total').textContent=fmt(tot)+' mots';
+
+  /* calendrier 12 mois (grille démarrant un dimanche) */
+  var cal=document.getElementById('cal'); cal.innerHTML='';
+  var months=document.getElementById('months'); months.innerHTML='';
+  var end=new Date(); end.setHours(12,0,0,0);
+  var start=new Date(end); start.setDate(end.getDate()-364);
+  start.setDate(start.getDate()-start.getDay()); /* recule au dimanche */
+  function lvl(v){ if(v<=0)return 0; var r=v/g; if(r<0.34)return 1; if(r<0.67)return 2; if(r<1.1)return 3; return 4; }
+  var shade=['var(--cal0)','var(--cal1)','var(--cal2)','var(--cal3)','var(--cal4)'];
+  var cur=new Date(start), monthMarks=[], col=0;
+  while(cur<=end){
+    if(cur.getDay()===0){ if(cur.getDate()<=7) monthMarks.push({col:col,label:MONTHS_FR[cur.getMonth()]}); col++; }
+    var k=dkey(cur), v=m.totalDaily[k]||0;
+    var cell=document.createElement('div'); cell.className='c'; cell.style.background=shade[lvl(v)];
+    cell.title=cur.toLocaleDateString('fr-FR')+' · '+fmt(v)+' mots';
+    cal.appendChild(cell);
+    cur.setDate(cur.getDate()+1);
+  }
+  monthMarks.forEach(function(mm){ var s=document.createElement('span'); s.textContent=mm.label; months.appendChild(s); });
+
+  /* barres 14 jours */
+  var bars=document.getElementById('bars'); bars.innerHTML='';
+  var win=[]; var d=new Date();
+  for(var i=13;i>=0;i--){ var dd=new Date(d); dd.setDate(d.getDate()-i); win.push(dkey(dd)); }
+  var mx=Math.max.apply(null, win.map(function(k){return m.totalDaily[k]||0;}).concat([1]));
+  win.forEach(function(k,idx){
+    var v=m.totalDaily[k]||0, h=v===0?2:Math.round(v/mx*108), isToday=idx===win.length-1;
+    var c=document.createElement('div'); c.className='col';
+    var cls=v===0?'bar empty':(isToday?'bar today':'bar');
+    var lab = parseKey(k).getDate()+'/'+(parseKey(k).getMonth()+1);
+    c.innerHTML='<div class="'+cls+'" style="height:'+h+'px" title="'+fmt(v)+' mots"></div><div class="d">'+lab+'</div>';
+    bars.appendChild(c);
+  });
+
+  /* projets */
+  var pc=document.getElementById('projects'); pc.innerHTML='';
+  var withTarget=m.docs.filter(function(x){return x.target>0;}).sort(function(a,b){return b.current-a.current;});
+  document.getElementById('proj-count').textContent = m.docs.length? (m.docs.length+' document'+(m.docs.length>1?'s':'')) : '';
+  if(!withTarget.length){
+    pc.innerHTML='<div class="empty-note">Aucun objectif de projet défini.<br>Ajoute une cible de mots à un document dans le plugin.</div>';
+  } else {
+    withTarget.forEach(function(p){
+      var pct=Math.min(100,Math.round(p.current/p.target*100));
+      var eta=projectEta(p);
+      var etaTxt = p.current>=p.target ? 'objectif atteint ✓' : (eta!=null ? 'fin estimée : ~'+eta+' j à ton rythme' : 'rythme insuffisant pour estimer');
+      var el=document.createElement('div'); el.className='proj';
+      el.innerHTML='<div class="pl"><span class="nm">'+escapeHtml(p.name)+'</span><span class="ct">'+fmt(p.current)+' / '+fmt(p.target)+'</span></div>'+
+        '<div class="track"><div class="fill" style="width:'+pct+'%"></div></div>'+
+        '<div class="eta"><i class="ic">⚑</i> '+etaTxt+'</div>';
+      pc.appendChild(el);
+    });
+  }
+
+  /* badges & records */
+  renderBadges(m, tot, cs, rs);
+
+  document.getElementById('foot-version').firstChild.textContent='v'+DASH_VERSION+' · ';
+}
+
+function badge(icon,color,label,unlocked){
+  return '<span class="badge'+(unlocked?'':' locked')+'"><i class="bi" style="color:'+(unlocked?color:'var(--muted)')+'">'+icon+'</i>'+label+'</span>';
+}
+function renderBadges(m, tot, cs, rs){
+  var bw=bestWeekday(m), bd=bestDay(m);
+  var html='';
+  var prodMiles=[[1000,'1 000 mots'],[10000,'10 000 mots'],[50000,'50 000 mots'],[100000,'100 000 mots']];
+  prodMiles.forEach(function(p){ html+=badge('★','var(--amber)','milestone '+p[1], tot>=p[0]); });
+  [[7,'série de 7 j'],[30,'série de 30 j'],[100,'série de 100 j']].forEach(function(s){
+    html+=badge('▲','var(--coral)', s[1], rs>=s[0]);
+  });
+  html+=badge('◆','var(--purple)','meilleur jour : '+fmt(bd), bd>0);
+  if(bw) html+=badge('◷','var(--blue)','plus productif : '+DOW_FR[bw.day], true);
+  var done=m.docs.some(function(x){return x.target>0 && x.current>=x.target;});
+  html+=badge('✦','var(--accent)','premier projet terminé', done);
+  document.getElementById('badges').innerHTML=html;
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+/* ---------- import / persistance ---------- */
+function saveModel(payload){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(payload)); }catch(e){} }
+function loadSaved(){
+  try{ var raw=JSON.parse(localStorage.getItem(STORE_KEY)); if(raw && raw.state) return raw; }catch(e){}
+  return null;
+}
+
+/* Accepte : (a) export plugin {app,version,state,goals}  (b) état brut {docs:{...}}  */
+function parseImport(text){
+  text=text.trim();
+  try{
+    var j=JSON.parse(text);
+    if(j && j.state && j.state.docs) return { state:j.state, goals:j.goals||null };
+    if(j && j.docs) return { state:j, goals:j.goals||null };
+  }catch(e){}
+  return null;
+}
+
+function applyImport(text){
+  var p=parseImport(text);
+  if(!p){ alert("Fichier non reconnu. Attendu : l'export JSON du plugin WriteFlow."); return; }
+  saveModel(p);
+  render(buildModel(p.state, p.goals, true));
+}
+
+/* ---------- init ---------- */
+var saved=loadSaved();
+render(saved ? buildModel(saved.state, saved.goals, true) : demoModel());
+
+document.getElementById('import-btn').onclick=function(){ document.getElementById('file').click(); };
+document.getElementById('file').addEventListener('change',function(ev){
+  var f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  var r=new FileReader(); r.onload=function(){ applyImport(String(r.result)); }; r.readAsText(f);
+  ev.target.value='';
+});
+document.getElementById('reset-btn').onclick=function(){
+  localStorage.removeItem(STORE_KEY); render(demoModel());
+};
+
+/* glisser-déposer */
+var root=document.getElementById('root');
+['dragover','dragenter'].forEach(function(e){ root.addEventListener(e,function(ev){ev.preventDefault();root.classList.add('drop');}); });
+['dragleave','drop'].forEach(function(e){ root.addEventListener(e,function(ev){ev.preventDefault();root.classList.remove('drop');}); });
+root.addEventListener('drop',function(ev){
+  var f=ev.dataTransfer.files&&ev.dataTransfer.files[0]; if(!f) return;
+  var r=new FileReader(); r.onload=function(){ applyImport(String(r.result)); }; r.readAsText(f);
+});
+</script>
+</body>
+</html>
