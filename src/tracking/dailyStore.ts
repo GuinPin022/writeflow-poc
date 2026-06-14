@@ -25,6 +25,7 @@ export interface DayDetail {
   typed: number;
   pasted: number;
   cut: number;
+  net?: number; // variation nette (selon Word) du jour, signee
 }
 
 export interface Goals {
@@ -45,6 +46,7 @@ interface DocData {
   daily: Record<string, number>;
   detail: Record<string, DayDetail>;
   target?: number; // objectif de mots pour le document complet (0 = aucun)
+  lastCount?: number; // dernier nombre de mots connu du document (selon Word)
 }
 
 interface State {
@@ -128,6 +130,26 @@ export class DailyStore {
     const st = this.state();
     const d = this.ensureDoc(st, docId);
     this.bump(d, dateKey(), "cut", n);
+    this.save(st);
+  }
+
+  /** Variation NETTE du jour (selon Word) : signee, peut etre negative. */
+  addNet(docId: string, deltaSigned: number): void {
+    if (deltaSigned === 0) return;
+    const st = this.state();
+    const d = this.ensureDoc(st, docId);
+    const k = dateKey();
+    const det = d.detail[k] || { typed: 0, pasted: 0, cut: 0 };
+    det.net = (det.net || 0) + deltaSigned;
+    d.detail[k] = det;
+    this.save(st);
+  }
+
+  /** Memorise le nombre de mots courant du document (selon Word). */
+  setDocCount(docId: string, count: number): void {
+    const st = this.state();
+    const d = this.ensureDoc(st, docId);
+    d.lastCount = count;
     this.save(st);
   }
 
@@ -285,6 +307,33 @@ export class DailyStore {
 
   getDocTarget(docId: string): number {
     return this.state().docs[docId]?.target || 0;
+  }
+
+  /** Nombre de mots actuel du document (net, selon Word). */
+  getDocWordCount(docId: string): number {
+    return this.state().docs[docId]?.lastCount || 0;
+  }
+
+  /** Variation nette du jour (tous documents, selon Word). */
+  getTodayNet(): number {
+    const st = this.state();
+    const k = dateKey();
+    let s = 0;
+    for (const doc of Object.values(st.docs)) s += doc.detail[k]?.net || 0;
+    return s;
+  }
+
+  /** Variation nette des 7 derniers jours (tous documents, selon Word). */
+  getWeekNet(): number {
+    const st = this.state();
+    let s = 0;
+    const d = new Date();
+    for (let i = 0; i < 7; i++) {
+      const k = dateKey(d);
+      for (const doc of Object.values(st.docs)) s += doc.detail[k]?.net || 0;
+      d.setDate(d.getDate() - 1);
+    }
+    return s;
   }
 
   setDocTarget(docId: string, n: number): void {

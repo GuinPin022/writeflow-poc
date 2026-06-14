@@ -80,20 +80,20 @@ export function renderDocumentView(
 
   const docId = currentDoc?.id || "";
   const docName = currentDoc?.name || store.getDocName(docId) || "—";
-  const docToday = docId ? store.getDocToday(docId) : 0;
-  const docTotal = docId ? store.getDocTotalAllTime(docId) : 0;
+  const docWord = docId ? store.getDocWordCount(docId) : 0; // net, selon Word
+  const docVolume = docId ? store.getDocTotalAllTime(docId) : 0; // volume tapé
   const docTarget = docId ? store.getDocTarget(docId) : 0;
-  const docFrac = docTarget > 0 ? docTotal / docTarget : 0;
+  const docFrac = docTarget > 0 ? docWord / docTarget : 0;
 
   const docBlock = docId
     ? `<div class="doc-block">
          <div class="doc-name" title="${docName}">📄 ${docName}</div>
          <div class="doc-kpis">
-           <div><span class="doc-v">${docToday}</span><span class="doc-l">aujourd'hui</span></div>
-           <div><span class="doc-v">${docTotal}</span><span class="doc-l">total ce doc</span></div>
+           <div><span class="doc-v">${docWord}</span><span class="doc-l">mots (Word)</span></div>
+           <div><span class="doc-v">${docVolume}</span><span class="doc-l">produit (volume)</span></div>
          </div>
          <div class="doc-goal">
-           <div class="doc-goal-top"><span>Objectif du document</span><span>${docTotal} / ${docTarget > 0 ? docTarget : "—"}</span></div>
+           <div class="doc-goal-top"><span>Objectif du document</span><span>${docWord} / ${docTarget > 0 ? docTarget : "—"}</span></div>
            <div class="wbar"><div class="wbar-fill" style="width:${(clamp01(docFrac) * 100).toFixed(0)}%"></div></div>
          </div>
        </div>`
@@ -142,8 +142,11 @@ export function renderDocumentView(
 export function renderGlobalView(container: HTMLElement, store: DailyStore): void {
   const goals = store.getGoals();
   const todayTotal = store.getToday();
+  const todayNet = store.getTodayNet();
   const week = store.getWeekTotal();
+  const weekNet = store.getWeekNet();
   const grand = store.grandTotal();
+  const fmt = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
   const cal = store.calendar(12, goals.daily);
   const rec = store.record();
   const avg = store.average();
@@ -164,16 +167,26 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
 
   container.innerHTML = `
     <div class="dash">
-      <div class="dash-section-label">Total — tous documents</div>
+      <div class="dash-section-label">Aujourd'hui — tous documents</div>
       <div class="kpi-row">
-        <div class="kpi"><span class="kpi-v">${todayTotal}</span><span class="kpi-l">aujourd'hui</span></div>
-        <div class="kpi"><span class="kpi-v">${week}</span><span class="kpi-l">cette semaine</span></div>
-        <div class="kpi"><span class="kpi-v">${grand}</span><span class="kpi-l">cumul total</span></div>
+        <div class="kpi"><span class="kpi-v">${todayTotal}</span><span class="kpi-l">volume tapé</span></div>
+        <div class="kpi"><span class="kpi-v">${fmt(todayNet)}</span><span class="kpi-l">net (Word)</span></div>
+      </div>
+
+      <div class="dash-section-label">Cette semaine</div>
+      <div class="kpi-row">
+        <div class="kpi"><span class="kpi-v">${week}</span><span class="kpi-l">volume tapé</span></div>
+        <div class="kpi"><span class="kpi-v">${fmt(weekNet)}</span><span class="kpi-l">net (Word)</span></div>
       </div>
 
       <div class="week-goal">
-        <div class="week-goal-top"><span>Objectif hebdomadaire</span><span>${week} / ${goals.weekly}</span></div>
+        <div class="week-goal-top"><span>Objectif hebdomadaire (volume)</span><span>${week} / ${goals.weekly}</span></div>
         <div class="wbar"><div class="wbar-fill" style="width:${(clamp01(weekFrac) * 100).toFixed(0)}%"></div></div>
+      </div>
+
+      <div class="dash-section-label">Cumul</div>
+      <div class="kpi-row">
+        <div class="kpi"><span class="kpi-v">${grand}</span><span class="kpi-l">volume cumulé</span></div>
       </div>
 
       <div class="dash-section-label">Calendrier (12 semaines)</div>

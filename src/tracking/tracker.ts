@@ -260,6 +260,11 @@ export class WriteFlowTracker {
       sessionState = "idle-closed";
     }
 
+    const docId = this.currentDocId || "unknown";
+    // Compteur NET (selon Word) : nombre de mots courant + variation nette du jour.
+    this.daily.setDocCount(docId, read.wordCount);
+    if (delta !== 0) this.daily.addNet(docId, delta);
+
     if (delta > 0) {
       // Productions positives : chaque modele ventile entre tape et colle.
       if (classification === "typed") this.typedProduction += delta;
@@ -269,16 +274,15 @@ export class WriteFlowTracker {
       if (classificationCombined === "typed") this.typedProductionCombined += delta;
       else this.pastedWordsCombined += delta;
 
-      // Persistance journaliere du tableau de bord : modele EVENEMENT (le plus fiable),
+      // Persistance journaliere du tableau de bord (VOLUME) : modele EVENEMENT,
       // ventilee PAR DOCUMENT.
-      const docId = this.currentDocId || "unknown";
       if (classificationEvent === "typed") this.daily.addProduction(docId, delta);
       else this.daily.addPasted(docId, delta);
     } else if (delta < 0) {
       // Suppressions : compteurs communs (coupe vs effacement). Production tapee inchangee.
       if (classificationCombined === "cut") {
         this.cutWords += -delta;
-        this.daily.addCut(this.currentDocId || "unknown", -delta);
+        this.daily.addCut(docId, -delta);
       } else {
         this.deletedWords += -delta;
       }
