@@ -26,7 +26,7 @@
   <SupportUrl DefaultValue="https://guinpin022.github.io/writeflow-poc" />
 
   <AppDomains>
-    <AppDomain>https://YOUR-USERNAME.github.io</AppDomain>
+    <AppDomain>https://guinpin022.github.io</AppDomain>
   </AppDomains>
 
   <Hosts>
