@@ -7,7 +7,7 @@ import {
 } from "./types";
 import { TrackLogger } from "./logger";
 import { OfflineQueue } from "./offlineQueue";
-import { DailyStore } from "./dailyStore";
+import { DailyStore, DocData } from "./dailyStore";
 
 /* global Word, Office */
 
@@ -63,6 +63,7 @@ export class WriteFlowTracker {
   // Identite du document courant (pour le comptage par document).
   private currentDocId = "";
   private currentDocName = "Document";
+  private persistTimer: number | null = null;
 
   private onUpdate?: (s: TrackerSnapshot) => void;
 
@@ -100,6 +101,29 @@ export class WriteFlowTracker {
     return this.running;
   }
 
+  /** Ecrit immediatement les donnees du document courant dans les settings du fichier. */
+  private persistDocNow(): void {
+    if (!this.currentDocId) return;
+    try {
+      const data = this.daily.exportDoc(this.currentDocId);
+      if (data) {
+        Office.context.document.settings.set("writeflow_doc_data", data);
+        Office.context.document.settings.saveAsync();
+      }
+    } catch {
+      /* persistance best-effort */
+    }
+  }
+
+  /** Planifie une ecriture (anti-rebond) vers les settings du fichier. */
+  private persistDocSoon(): void {
+    if (this.persistTimer !== null) return;
+    this.persistTimer = window.setTimeout(() => {
+      this.persistTimer = null;
+      this.persistDocNow();
+    }, 3000);
+  }
+
   /**
    * Resout l'identite du document courant :
    *  - un GUID stocke dans les settings du document (persiste DANS le fichier) ;
@@ -119,6 +143,9 @@ export class WriteFlowTracker {
           });
         }
         this.currentDocId = id;
+        // Hydratation depuis les settings du fichier (synchronises via OneDrive).
+        const saved = settings.get("writeflow_doc_data");
+        if (saved) this.daily.importDoc(this.currentDocId, saved as DocData);
       } catch {
         this.currentDocId = this.currentDocId || uuidv4();
       }
@@ -289,7 +316,10 @@ export class WriteFlowTracker {
       }
     }
 
-    if (delta !== 0) this.lastActivityTime = now;
+    if (delta !== 0) {
+      this.lastActivityTime = now;
+      this.persistDocSoon(); // sauvegarde vers les settings du fichier (OneDrive)
+    }
     if (source !== "poll") this.lastEventTime = now;
 
     const event: TrackEvent = {
@@ -415,6 +445,12 @@ export class WriteFlowTracker {
       window.clearInterval(this.pollHandle);
       this.pollHandle = null;
     }
+    // Flush immediat des donnees du document vers les settings du fichier.
+    if (this.persistTimer !== null) {
+      window.clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.persistDocNow();
     // Desabonnement des evenements Word. Pattern runtime officiel :
     // Word.run(result.context, ...). Les typings n'exposent pas cet overload,
     // d'ou le cast (sans impact a l'execution).

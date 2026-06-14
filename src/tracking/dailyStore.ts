@@ -41,7 +41,7 @@ export interface DayCell {
   level: 0 | 1 | 2 | 3 | 4;
 }
 
-interface DocData {
+export interface DocData {
   name: string;
   daily: Record<string, number>;
   detail: Record<string, DayDetail>;
@@ -443,6 +443,24 @@ export class DailyStore {
 
   setGoals(goals: Partial<Goals>): void {
     window.localStorage.setItem(KEY_GOALS, JSON.stringify({ ...this.getGoals(), ...goals }));
+  }
+
+  /** Donnees completes d'un document (pour persistance dans les settings du fichier). */
+  exportDoc(docId: string): DocData | null {
+    return this.state().docs[docId] || null;
+  }
+
+  /** Injecte les donnees d'un document (lues depuis les settings du fichier / OneDrive). */
+  importDoc(docId: string, data: DocData): void {
+    const st = this.state();
+    st.docs[docId] = {
+      name: data.name || st.docs[docId]?.name || docId,
+      daily: data.daily || {},
+      detail: data.detail || {},
+      target: data.target,
+      lastCount: data.lastCount,
+    };
+    this.save(st);
   }
 
   clear(): void {
