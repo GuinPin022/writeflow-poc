@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WriteFlow Tracking POC</title>
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+    <!-- Le CSS est injecte par webpack (import dans taskpane.ts). -->
+  </head>
+  <body>
+    <main id="app">
+      <h1>WriteFlow — POC tracking</h1>
+      <p id="status" class="status">Chargement d'Office.js…</p>
+
+      <section class="grid">
+        <div class="card"><span class="label">Mots (doc)</span><span id="total" class="value">0</span></div>
+        <div class="card"><span class="label">Supprimé (cumul)</span><span id="deleted" class="value">0</span></div>
+        <div class="card"><span class="label">Coupé (Ctrl-X / bloc)</span><span id="cut" class="value">0</span></div>
+        <div class="card"><span class="label">Relevés</span><span id="ticks" class="value">0</span></div>
+      </section>
+
+      <h2 class="model-title">Modèle VITESSE (seuil + mots/s)</h2>
+      <section class="grid">
+        <div class="card"><span class="label">Production tapée</span><span id="typed" class="value">0</span></div>
+        <div class="card"><span class="label">Collé / importé</span><span id="pasted" class="value">0</span></div>
+      </section>
+
+      <h2 class="model-title">Modèle ÉVÉNEMENT (volume / événement)</h2>
+      <section class="grid">
+        <div class="card"><span class="label">Production tapée</span><span id="typed-ev" class="value">0</span></div>
+        <div class="card"><span class="label">Collé / importé</span><span id="pasted-ev" class="value">0</span></div>
+      </section>
+
+      <h2 class="model-title">Modèle COMBINÉ (volume + isolement)</h2>
+      <section class="grid">
+        <div class="card highlight"><span class="label">Production tapée</span><span id="typed-cb" class="value">0</span></div>
+        <div class="card highlight"><span class="label">Collé / importé</span><span id="pasted-cb" class="value">0</span></div>
+      </section>
+
+      <section class="grid">
+        <div class="card"><span class="label">Latence (ms)</span><span id="latency" class="value">0</span></div>
+      </section>
+
+      <p class="session">Session : <span id="session">inactive</span> · File hors-ligne : <span id="queue">0</span></p>
+
+      <div class="actions">
+        <button id="start" class="primary">Démarrer</button>
+        <button id="sample">Relever maintenant</button>
+        <button id="stop">Arrêter</button>
+      </div>
+      <div class="actions">
+        <button id="toggle-net">Couper le réseau (test offline)</button>
+        <button id="flush">Vider la file</button>
+      </div>
+      <div class="actions">
+        <button id="csv">Export CSV</button>
+        <button id="json">Export JSON</button>
+        <button id="reset">Réinitialiser</button>
+      </div>
+
+      <p class="hint">
+        Ouvre la console (F12) pour le journal en direct. Saisis ta « vérité terrain »
+        à la main et compare-la à la colonne <em>typedProductionCumulative</em> de l'export.
+      </p>
+    </main>
+    <!-- Le bundle JS est injecte automatiquement par HtmlWebpackPlugin. -->
+  </body>
+</html>

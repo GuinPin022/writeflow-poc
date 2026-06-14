@@ -1,0 +1,368 @@
+import {
+  Classification,
+  DEFAULT_CONFIG,
+  TrackerConfig,
+  TrackerSnapshot,
+  TrackEvent,
+} from "./types";
+import { TrackLogger } from "./logger";
+import { OfflineQueue } from "./offlineQueue";
+
+/* global Word, Office */
+
+/**
+ * Moteur de tracking POC — approche HYBRIDE :
+ *   1. Releve periodique (polling) du nombre de mots via body.text + diff.
+ *   2. Evenements paragraphe (WordApi 1.5) detectes a l'execution s'ils existent,
+ *      pour declencher un releve immediat et mesurer la reactivite.
+ *   3. Classification du delta (frappe / collage / suppression) par heuristique
+ *      double : seuil absolu + vitesse (mots/s).
+ *
+ * Le but du POC est de MESURER la justesse de cette logique, pas de la croire.
+ */
+export class WriteFlowTracker {
+  private config: TrackerConfig;
+  private logger: TrackLogger;
+  private queue: OfflineQueue;
+
+  private pollHandle: number | null = null;
+  // Resultats d'enregistrement d'evenements Word, pour desinscription propre.
+  // Type volontairement souple : les typings Office.js varient selon les versions.
+  private eventResults: Array<{ context: OfficeExtension.ClientRequestContext; remove: () => void }> = [];
+  private running = false;
+
+  private tick = 0;
+  private lastWordCount = 0;
+  private lastSnapshotTime = 0;
+  private lastActivityTime = 0;
+  // Modele VITESSE
+  private typedProduction = 0;
+  private pastedWords = 0;
+  // Modele EVENEMENT (en parallele, pour comparaison)
+  private typedProductionEvent = 0;
+  private pastedWordsEvent = 0;
+  // Modele COMBINE (volume + isolement temporel)
+  private typedProductionCombined = 0;
+  private pastedWordsCombined = 0;
+  // Commun
+  private deletedWords = 0;
+  private cutWords = 0;
+  private lastEventTime = 0;
+  private sessionActive = false;
+
+  private onUpdate?: (s: TrackerSnapshot) => void;
+
+  constructor(opts?: {
+    config?: Partial<TrackerConfig>;
+    logger?: TrackLogger;
+    queue?: OfflineQueue;
+    onUpdate?: (s: TrackerSnapshot) => void;
+  }) {
+    this.config = { ...DEFAULT_CONFIG, ...(opts?.config ?? {}) };
+    this.logger = opts?.logger ?? new TrackLogger();
+    this.queue = opts?.queue ?? new OfflineQueue();
+    this.onUpdate = opts?.onUpdate;
+  }
+
+  getLogger(): TrackLogger {
+    return this.logger;
+  }
+
+  getQueue(): OfflineQueue {
+    return this.queue;
+  }
+
+  /** Compte les mots d'un texte. Strategie POC : separation sur espaces/sauts. */
+  static countWords(text: string): number {
+    if (!text) return 0;
+    const tokens = text
+      .replace(/[ ]/g, " ") // espaces insecables
+      .trim()
+      .split(/\s+/)
+      .filter((t) => /[\p{L}\p{N}]/u.test(t)); // garde ce qui contient lettre/chiffre
+    return tokens.length;
+  }
+
+  private platform(): string {
+    try {
+      return Office.context.platform ? String(Office.context.platform) : "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  /** [Modele VITESSE] Classification par seuil absolu OU vitesse (mots/s). */
+  private classifyByRate(delta: number, elapsedMs: number): Classification {
+    if (delta < 0) return "deletion";
+    if (delta === 0) return "noise";
+    const seconds = Math.max(elapsedMs / 1000, 0.001);
+    const wps = delta / seconds;
+    if (delta >= this.config.absolutePasteThresholdWords) return "paste";
+    if (wps > this.config.maxTypingWordsPerSecond) return "paste";
+    return "typed";
+  }
+
+  /**
+   * [Modele EVENEMENT] Classification par volume livre en un seul evenement.
+   * Insensible au timing. Pour un releve periodique (poll), le delta est un agregat
+   * sur 30 s : on retombe sur le seuil absolu faute de pouvoir juger l'atomicite.
+   */
+  private classifyByEvent(delta: number, source: TrackEvent["source"]): Classification {
+    if (delta < 0) return "deletion";
+    if (delta === 0) return "noise";
+    if (source === "poll") {
+      return delta >= this.config.absolutePasteThresholdWords ? "paste" : "typed";
+    }
+    // Evenement Word atomique : un gros bloc d'un coup = collage.
+    return delta >= this.config.perEventPasteThresholdWords ? "paste" : "typed";
+  }
+
+  /**
+   * [Modele COMBINE] Corrige les deux angles morts :
+   *   - petit collage apres pause -> evenement isole (dtEvent grand) = collage
+   *   - frappe tres rapide groupee par Word -> flux d'evenements rapproches = frappe
+   */
+  private classifyCombined(delta: number, source: TrackEvent["source"], dtEvent: number): Classification {
+    if (delta < 0) return "deletion";
+    if (delta === 0) return "noise";
+    if (delta >= this.config.absolutePasteThresholdWords) return "paste";
+    if (source === "poll") return "typed"; // agregat 30 s : pas d'atomicite jugeable
+    if (delta >= this.config.perEventPasteThresholdWords && dtEvent > this.config.isolatedEventGapMs) {
+      return "paste";
+    }
+    return "typed";
+  }
+
+  /** Lit le document et renvoie {wordCount, latencyMs}. */
+  private async readDocument(): Promise<{ wordCount: number; latencyMs: number }> {
+    const start = performance.now();
+    const wordCount = await Word.run(async (context) => {
+      const body = context.document.body;
+      body.load("text");
+      await context.sync();
+      return WriteFlowTracker.countWords(body.text);
+    });
+    return { wordCount, latencyMs: performance.now() - start };
+  }
+
+  /** Coeur de la mesure : appele par le polling et par les evenements. */
+  private async snapshot(source: TrackEvent["source"]): Promise<void> {
+    let read: { wordCount: number; latencyMs: number };
+    try {
+      read = await this.readDocument();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("Echec releve Word:", e);
+      return;
+    }
+
+    const now = Date.now();
+    const elapsedMs = this.lastSnapshotTime ? now - this.lastSnapshotTime : 0;
+    const delta = read.wordCount - this.lastWordCount;
+    const seconds = Math.max(elapsedMs / 1000, 0.001);
+    const wordsPerSecond = delta > 0 ? delta / seconds : 0;
+    // Temps depuis le dernier EVENEMENT (polls exclus) : mesure d'isolement.
+    const msSinceLastEvent = this.lastEventTime ? now - this.lastEventTime : 0;
+    const dtEvent = this.lastEventTime ? now - this.lastEventTime : Number.MAX_SAFE_INTEGER;
+
+    let classification = this.classifyByRate(delta, elapsedMs);
+    let classificationEvent = this.classifyByEvent(delta, source);
+    let classificationCombined = this.classifyCombined(delta, source, dtEvent);
+
+    // Distinction coupe (suppression atomique en un evenement) vs effacement manuel.
+    if (delta < 0) {
+      const atomicCut =
+        source !== "poll" && -delta >= this.config.perEventPasteThresholdWords;
+      const delClass: Classification = atomicCut ? "cut" : "deletion";
+      classification = delClass;
+      classificationEvent = delClass;
+      classificationCombined = delClass;
+    }
+
+    // Gestion de session (inactivite).
+    let sessionState: TrackEvent["sessionState"] = "ongoing";
+    const idle = this.lastActivityTime ? now - this.lastActivityTime : 0;
+    if (!this.sessionActive) {
+      this.sessionActive = true;
+      sessionState = "started";
+    } else if (idle > this.config.idleTimeoutMs && delta === 0) {
+      this.sessionActive = false;
+      sessionState = "idle-closed";
+    }
+
+    if (delta > 0) {
+      // Productions positives : chaque modele ventile entre tape et colle.
+      if (classification === "typed") this.typedProduction += delta;
+      else this.pastedWords += delta;
+      if (classificationEvent === "typed") this.typedProductionEvent += delta;
+      else this.pastedWordsEvent += delta;
+      if (classificationCombined === "typed") this.typedProductionCombined += delta;
+      else this.pastedWordsCombined += delta;
+    } else if (delta < 0) {
+      // Suppressions : compteurs communs (coupe vs effacement). Production tapee inchangee.
+      if (classificationCombined === "cut") this.cutWords += -delta;
+      else this.deletedWords += -delta;
+    }
+
+    if (delta !== 0) this.lastActivityTime = now;
+    if (source !== "poll") this.lastEventTime = now;
+
+    const event: TrackEvent = {
+      ts: new Date(now).toISOString(),
+      tick: ++this.tick,
+      source,
+      totalWords: read.wordCount,
+      delta,
+      elapsedMs,
+      wordsPerSecond,
+      classification,
+      classificationEvent,
+      classificationCombined,
+      msSinceLastEvent,
+      typedProductionCumulative: this.typedProduction,
+      typedProductionEventCumulative: this.typedProductionEvent,
+      typedProductionCombinedCumulative: this.typedProductionCombined,
+      latencyMs: read.latencyMs,
+      platform: this.platform(),
+      sessionState,
+    };
+
+    this.logger.add(event);
+    this.queue.enqueue(event);
+
+    this.lastWordCount = read.wordCount;
+    this.lastSnapshotTime = now;
+    this.lastKnownLatency = read.latencyMs;
+
+    this.emit();
+  }
+
+  private emit(): void {
+    this.onUpdate?.({
+      totalWords: this.lastWordCount,
+      typedProduction: this.typedProduction,
+      pastedWords: this.pastedWords,
+      typedProductionEvent: this.typedProductionEvent,
+      pastedWordsEvent: this.pastedWordsEvent,
+      typedProductionCombined: this.typedProductionCombined,
+      pastedWordsCombined: this.pastedWordsCombined,
+      deletedWords: this.deletedWords,
+      cutWords: this.cutWords,
+      ticks: this.tick,
+      lastLatencyMs: this.logger.count() ? this.lastLatency() : 0,
+      sessionActive: this.sessionActive,
+      eventsCount: this.logger.count(),
+    });
+  }
+
+  private lastLatency(): number {
+    // Petit utilitaire : derniere latence connue, sinon 0.
+    return this.lastKnownLatency;
+  }
+  private lastKnownLatency = 0;
+
+  /** Enregistre les evenements paragraphe si l'API les supporte (WordApi 1.5). */
+  private async registerEvents(): Promise<void> {
+    const supports15 =
+      Office.context.requirements && Office.context.requirements.isSetSupported("WordApi", "1.5");
+    if (!supports15) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "WordApi 1.5 non supporte sur cette plateforme : mode polling seul. " +
+          "Resultat a documenter dans la matrice cross-plateforme."
+      );
+      return;
+    }
+
+    try {
+      await Word.run(async (context) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const doc = context.document as any;
+        this.eventResults.push(doc.onParagraphChanged.add(() => this.snapshot("paragraphChanged")));
+        this.eventResults.push(doc.onParagraphAdded.add(() => this.snapshot("paragraphAdded")));
+        this.eventResults.push(doc.onParagraphDeleted.add(() => this.snapshot("paragraphDeleted")));
+        await context.sync();
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("Enregistrement des evenements paragraphe echoue, polling seul:", e);
+    }
+
+    // Signal d'activite large (supporte tres largement) : changement de selection.
+    try {
+      Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, () => {
+        this.lastActivityTime = Date.now();
+      });
+    } catch {
+      /* non bloquant */
+    }
+  }
+
+  /** Demarre le tracking : releve initial + evenements + boucle de polling. */
+  async start(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+
+    const initial = await this.readDocument();
+    this.lastWordCount = initial.wordCount;
+    this.lastKnownLatency = initial.latencyMs;
+    this.lastSnapshotTime = Date.now();
+    this.lastActivityTime = Date.now();
+    this.lastEventTime = Date.now();
+    this.emit();
+
+    await this.registerEvents();
+
+    this.pollHandle = window.setInterval(() => {
+      void this.snapshot("poll");
+    }, this.config.pollIntervalMs);
+  }
+
+  /** Force un releve immediat (bouton "Relever maintenant" pour les tests courts). */
+  async sampleNow(): Promise<void> {
+    await this.snapshot("poll");
+  }
+
+  async stop(): Promise<void> {
+    if (this.pollHandle !== null) {
+      window.clearInterval(this.pollHandle);
+      this.pollHandle = null;
+    }
+    // Desabonnement des evenements Word. Pattern runtime officiel :
+    // Word.run(result.context, ...). Les typings n'exposent pas cet overload,
+    // d'ou le cast (sans impact a l'execution).
+    for (const result of this.eventResults) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (Word as any).run(result.context, async (context: Word.RequestContext) => {
+          result.remove();
+          await context.sync();
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    this.eventResults = [];
+    this.running = false;
+    this.sessionActive = false;
+    this.emit();
+  }
+
+  reset(): void {
+    this.tick = 0;
+    this.lastWordCount = 0;
+    this.lastSnapshotTime = 0;
+    this.lastActivityTime = 0;
+    this.typedProduction = 0;
+    this.pastedWords = 0;
+    this.typedProductionEvent = 0;
+    this.pastedWordsEvent = 0;
+    this.typedProductionCombined = 0;
+    this.pastedWordsCombined = 0;
+    this.deletedWords = 0;
+    this.cutWords = 0;
+    this.lastEventTime = 0;
+    this.logger.clear();
+    this.emit();
+  }
+}
