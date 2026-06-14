@@ -9,9 +9,27 @@
   </head>
   <body>
     <main id="app">
-      <h1>WriteFlow — POC tracking</h1>
+      <h1>WriteFlow</h1>
       <p id="status" class="status">Chargement d'Office.js…</p>
 
+      <nav class="tabs">
+        <button id="tab-document" class="tab active">Document</button>
+        <button id="tab-global" class="tab">Global</button>
+        <button id="tab-settings" class="tab">Réglages</button>
+        <button id="tab-poc" class="tab">POC</button>
+      </nav>
+
+      <!-- VUE DOCUMENT (document courant + stats du jour) -->
+      <div id="view-document"></div>
+
+      <!-- VUE GLOBAL (calendrier, semaine, record/moyenne, cumul) -->
+      <div id="view-global" hidden></div>
+
+      <!-- VUE RÉGLAGES (objectifs + réinitialisation) -->
+      <div id="view-settings" hidden></div>
+
+      <!-- VUE POC (mesure) — inchangée, pour les tests -->
+      <div id="view-poc" hidden>
       <section class="grid">
         <div class="card"><span class="label">Mots (doc)</span><span id="total" class="value">0</span></div>
         <div class="card"><span class="label">Supprimé (cumul)</span><span id="deleted" class="value">0</span></div>
@@ -62,6 +80,7 @@
         Ouvre la console (F12) pour le journal en direct. Saisis ta « vérité terrain »
         à la main et compare-la à la colonne <em>typedProductionCumulative</em> de l'export.
       </p>
+      </div>
     </main>
     <!-- Le bundle JS est injecte automatiquement par HtmlWebpackPlugin. -->
   </body>

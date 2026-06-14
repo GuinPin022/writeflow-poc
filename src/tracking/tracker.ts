@@ -7,8 +7,18 @@ import {
 } from "./types";
 import { TrackLogger } from "./logger";
 import { OfflineQueue } from "./offlineQueue";
+import { DailyStore } from "./dailyStore";
 
 /* global Word, Office */
+
+/** Generateur d'UUID v4 simple (suffisant pour identifier un document). */
+function uuidv4(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 /**
  * Moteur de tracking POC — approche HYBRIDE :
@@ -24,6 +34,7 @@ export class WriteFlowTracker {
   private config: TrackerConfig;
   private logger: TrackLogger;
   private queue: OfflineQueue;
+  private daily: DailyStore;
 
   private pollHandle: number | null = null;
   // Resultats d'enregistrement d'evenements Word, pour desinscription propre.
@@ -49,6 +60,9 @@ export class WriteFlowTracker {
   private cutWords = 0;
   private lastEventTime = 0;
   private sessionActive = false;
+  // Identite du document courant (pour le comptage par document).
+  private currentDocId = "";
+  private currentDocName = "Document";
 
   private onUpdate?: (s: TrackerSnapshot) => void;
 
@@ -56,11 +70,13 @@ export class WriteFlowTracker {
     config?: Partial<TrackerConfig>;
     logger?: TrackLogger;
     queue?: OfflineQueue;
+    daily?: DailyStore;
     onUpdate?: (s: TrackerSnapshot) => void;
   }) {
     this.config = { ...DEFAULT_CONFIG, ...(opts?.config ?? {}) };
     this.logger = opts?.logger ?? new TrackLogger();
     this.queue = opts?.queue ?? new OfflineQueue();
+    this.daily = opts?.daily ?? new DailyStore();
     this.onUpdate = opts?.onUpdate;
   }
 
@@ -70,6 +86,60 @@ export class WriteFlowTracker {
 
   getQueue(): OfflineQueue {
     return this.queue;
+  }
+
+  getDailyStore(): DailyStore {
+    return this.daily;
+  }
+
+  getCurrentDoc(): { id: string; name: string } {
+    return { id: this.currentDocId, name: this.currentDocName };
+  }
+
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  /**
+   * Resout l'identite du document courant :
+   *  - un GUID stocke dans les settings du document (persiste DANS le fichier) ;
+   *  - le nom de fichier pour l'affichage (vide si le doc n'est pas enregistre).
+   */
+  private resolveDocument(): Promise<void> {
+    return new Promise((resolve) => {
+      // 1) GUID stable via les settings du document.
+      try {
+        const settings = Office.context.document.settings;
+        let id = settings.get("writeflow_doc_id") as string | null;
+        if (!id) {
+          id = uuidv4();
+          settings.set("writeflow_doc_id", id);
+          settings.saveAsync(() => {
+            /* persistance best-effort : ignore le resultat */
+          });
+        }
+        this.currentDocId = id;
+      } catch {
+        this.currentDocId = this.currentDocId || uuidv4();
+      }
+
+      // 2) Nom d'affichage via l'URL du fichier (best-effort).
+      try {
+        Office.context.document.getFilePropertiesAsync((res) => {
+          let name = "Document sans nom";
+          if (res.status === Office.AsyncResultStatus.Succeeded && res.value && res.value.url) {
+            const parts = res.value.url.split(/[\\/]/);
+            name = parts[parts.length - 1] || res.value.url;
+          }
+          this.currentDocName = name;
+          this.daily.registerDoc(this.currentDocId, name);
+          resolve();
+        });
+      } catch {
+        this.daily.registerDoc(this.currentDocId, this.currentDocName);
+        resolve();
+      }
+    });
   }
 
   /** Compte les mots d'un texte. Strategie POC : separation sur espaces/sauts. */
@@ -198,10 +268,20 @@ export class WriteFlowTracker {
       else this.pastedWordsEvent += delta;
       if (classificationCombined === "typed") this.typedProductionCombined += delta;
       else this.pastedWordsCombined += delta;
+
+      // Persistance journaliere du tableau de bord : modele EVENEMENT (le plus fiable),
+      // ventilee PAR DOCUMENT.
+      const docId = this.currentDocId || "unknown";
+      if (classificationEvent === "typed") this.daily.addProduction(docId, delta);
+      else this.daily.addPasted(docId, delta);
     } else if (delta < 0) {
       // Suppressions : compteurs communs (coupe vs effacement). Production tapee inchangee.
-      if (classificationCombined === "cut") this.cutWords += -delta;
-      else this.deletedWords += -delta;
+      if (classificationCombined === "cut") {
+        this.cutWords += -delta;
+        this.daily.addCut(this.currentDocId || "unknown", -delta);
+      } else {
+        this.deletedWords += -delta;
+      }
     }
 
     if (delta !== 0) this.lastActivityTime = now;
@@ -302,6 +382,8 @@ export class WriteFlowTracker {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+
+    await this.resolveDocument();
 
     const initial = await this.readDocument();
     this.lastWordCount = initial.wordCount;

@@ -1,6 +1,7 @@
 import "./taskpane.css";
 import { WriteFlowTracker } from "../tracking/tracker";
 import { TrackerSnapshot } from "../tracking/types";
+import { renderDocumentView, renderGlobalView, renderSettingsView } from "./dashboard";
 
 /* global Office, document, window */
 
@@ -34,14 +35,73 @@ function render(s: TrackerSnapshot): void {
   if (tracker) $("queue").textContent = String(tracker.getQueue().pendingCount());
 }
 
+async function toggleTracker(): Promise<void> {
+  if (!tracker) return;
+  try {
+    if (tracker.isRunning()) {
+      await tracker.stop();
+      setStatus("Suivi arrêté.", "");
+    } else {
+      await tracker.start();
+      setStatus("Suivi actif (relevé toutes les 30 s).", "ok");
+    }
+  } catch (e) {
+    setStatus(`Erreur : ${(e as Error).message}`, "err");
+  }
+  renderDoc();
+}
+
+function renderDoc(): void {
+  if (!tracker) return;
+  renderDocumentView($("view-document"), tracker.getDailyStore(), tracker.getCurrentDoc(), {
+    running: tracker.isRunning(),
+    onToggle: () => void toggleTracker(),
+  });
+}
+
+function renderGlobal(): void {
+  if (tracker) renderGlobalView($("view-global"), tracker.getDailyStore());
+}
+
+function renderSettings(): void {
+  if (tracker) renderSettingsView($("view-settings"), tracker.getDailyStore(), tracker.getCurrentDoc());
+}
+
+function onUpdate(s: TrackerSnapshot): void {
+  render(s);
+  // Vues sans champ de saisie : on peut les rafraichir a chaque releve.
+  renderDoc();
+  renderGlobal();
+}
+
+type View = "document" | "global" | "settings" | "poc";
+
+function showView(view: View): void {
+  const views: View[] = ["document", "global", "settings", "poc"];
+  for (const v of views) {
+    ($(`view-${v}`) as HTMLElement).hidden = v !== view;
+    $(`tab-${v}`).classList.toggle("active", v === view);
+  }
+  if (view === "document") renderDoc();
+  else if (view === "global") renderGlobal();
+  else if (view === "settings") renderSettings(); // rendu a l'ouverture (champs de saisie)
+}
+
 Office.onReady((info) => {
   if (info.host !== Office.HostType.Word) {
     setStatus("Cet add-in doit s'executer dans Word.", "err");
     return;
   }
 
-  tracker = new WriteFlowTracker({ onUpdate: render });
+  tracker = new WriteFlowTracker({ onUpdate });
   setStatus(`Pret. Plateforme : ${Office.context.platform}.`, "ok");
+
+  $("tab-document").addEventListener("click", () => showView("document"));
+  $("tab-global").addEventListener("click", () => showView("global"));
+  $("tab-settings").addEventListener("click", () => showView("settings"));
+  $("tab-poc").addEventListener("click", () => showView("poc"));
+  renderDoc(); // rendu initial (onglet Document affiche par defaut)
+  renderGlobal();
 
   $("start").addEventListener("click", async () => {
     try {
