@@ -107,13 +107,22 @@ export class DailyStore {
     this.save(st);
   }
 
-  addProduction(docId: string, n: number): void {
+  /** Mots PRODUCTIFS (toutes additions confondues) -> tableau de bord. */
+  addProductive(docId: string, n: number): void {
     if (n <= 0) return;
     const st = this.state();
     const d = this.ensureDoc(st, docId);
     const k = dateKey();
     d.daily[k] = (d.daily[k] || 0) + n;
-    this.bump(d, k, "typed", n);
+    this.save(st);
+  }
+
+  /** [POC] Addition classee "tapee" (ventilation fine, conservee pour le POC). */
+  addTyped(docId: string, n: number): void {
+    if (n <= 0) return;
+    const st = this.state();
+    const d = this.ensureDoc(st, docId);
+    this.bump(d, dateKey(), "typed", n);
     this.save(st);
   }
 
@@ -153,7 +162,7 @@ export class DailyStore {
     this.save(st);
   }
 
-  private bump(d: DocData, k: string, field: keyof DayDetail, n: number): void {
+  private bump(d: DocData, k: string, field: "typed" | "pasted" | "cut", n: number): void {
     const det = d.detail[k] || { typed: 0, pasted: 0, cut: 0 };
     det[field] += n;
     d.detail[k] = det;
@@ -303,6 +312,85 @@ export class DailyStore {
     const doc = this.state().docs[docId];
     if (!doc) return 0;
     return Object.values(doc.daily).reduce((a, b) => a + b, 0);
+  }
+
+  private docData(docId: string): DocData | undefined {
+    return this.state().docs[docId];
+  }
+
+  /** Mots productifs du document — aujourd'hui. */
+  getDocProductiveToday(docId: string): number {
+    return this.docData(docId)?.daily[dateKey()] || 0;
+  }
+
+  /** Mots productifs du document — 7 derniers jours. */
+  getDocProductiveWeek(docId: string): number {
+    const d = this.docData(docId);
+    if (!d) return 0;
+    let s = 0;
+    const dt = new Date();
+    for (let i = 0; i < 7; i++) {
+      s += d.daily[dateKey(dt)] || 0;
+      dt.setDate(dt.getDate() - 1);
+    }
+    return s;
+  }
+
+  /** Variation nette (selon Word) du document — aujourd'hui. */
+  getDocNetToday(docId: string): number {
+    return this.docData(docId)?.detail[dateKey()]?.net || 0;
+  }
+
+  /** Variation nette (selon Word) du document — 7 derniers jours. */
+  getDocNetWeek(docId: string): number {
+    const d = this.docData(docId);
+    if (!d) return 0;
+    let s = 0;
+    const dt = new Date();
+    for (let i = 0; i < 7; i++) {
+      s += d.detail[dateKey(dt)]?.net || 0;
+      dt.setDate(dt.getDate() - 1);
+    }
+    return s;
+  }
+
+  /** 7 derniers jours du document : net (Word) + productif, du plus ancien au plus recent. */
+  docLast7(docId: string): Array<{ key: string; label: string; net: number; prod: number }> {
+    const d = this.docData(docId);
+    const days = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    const out: Array<{ key: string; label: string; net: number; prod: number }> = [];
+    const dt = new Date();
+    dt.setDate(dt.getDate() - 6);
+    for (let i = 0; i < 7; i++) {
+      const k = dateKey(dt);
+      out.push({ key: k, label: days[dt.getDay()], net: d?.detail[k]?.net || 0, prod: d?.daily[k] || 0 });
+      dt.setDate(dt.getDate() + 1);
+    }
+    return out;
+  }
+
+  /** Calendrier du document en LIGNES de semaine (weeks x 7 jours, Lun->Dim), intensite = productif. */
+  docCalendarRows(docId: string, weeks: number, dailyGoal: number): DayCell[][] {
+    const d = this.docData(docId);
+    const end = new Date();
+    const dow = (end.getDay() + 6) % 7;
+    const monday = new Date(end);
+    monday.setDate(end.getDate() - dow);
+    const start = new Date(monday);
+    start.setDate(monday.getDate() - 7 * (weeks - 1));
+    const rows: DayCell[][] = [];
+    const cur = new Date(start);
+    for (let w = 0; w < weeks; w++) {
+      const row: DayCell[] = [];
+      for (let day = 0; day < 7; day++) {
+        const k = dateKey(cur);
+        const typed = d?.daily[k] || 0;
+        row.push({ key: k, typed, level: this.level(typed, dailyGoal) });
+        cur.setDate(cur.getDate() + 1);
+      }
+      rows.push(row);
+    }
+    return rows;
   }
 
   getDocTarget(docId: string): number {

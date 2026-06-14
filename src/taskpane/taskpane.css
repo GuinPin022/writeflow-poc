@@ -106,6 +106,32 @@ button.primary:hover { background: #21467d; }
 .doc-goal-set { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 6px; }
 .doc-goal-set input { flex: 1; padding: 5px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; min-width: 0; }
 
+/* Lignes de métrique (Word / productif vs objectif) */
+.m { margin: 8px 0; }
+.m-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.m-top .vl { color: var(--muted); }
+.pbar { height: 8px; background: var(--card); border-radius: 4px; overflow: hidden; }
+.pbar > i { display: block; height: 100%; border-radius: 4px; }
+.fill-word { background: var(--accent); }
+.fill-prod { background: #0F6E56; }
+
+/* Graphe 7 jours empilé + ligne d'objectif */
+.chart { position: relative; height: 92px; margin-top: 4px; }
+.cbars { display: flex; gap: 5px; align-items: flex-end; height: 100%; position: relative; z-index: 1; }
+.cbar { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.seg-extra { width: 100%; background: #5DCAA5; border-radius: 3px 3px 0 0; }
+.seg-keep { width: 100%; background: var(--accent); }
+.cbl { font-size: 10px; color: var(--muted); text-align: center; margin-top: 3px; }
+.goal-line { position: absolute; left: 0; right: 0; border-top: 1.5px dashed #d98324; z-index: 2; }
+.goal-tag { position: absolute; right: 0; transform: translateY(-13px); font-size: 10px; color: #d98324; }
+.legend2 { display: flex; gap: 14px; font-size: 11px; margin-top: 8px; color: var(--muted); }
+.dot.seg-keep { background: var(--accent); }
+.dot.seg-extra { background: #5DCAA5; }
+
+/* Calendrier en lignes (7 colonnes x N lignes) */
+.cal-rows { display: flex; flex-direction: column; gap: 4px; }
+.cal-row { display: flex; gap: 4px; }
+
 .doc-block {
   background: var(--highlight); border: 1px solid var(--accent);
   border-radius: 8px; padding: 10px; margin-bottom: 12px;

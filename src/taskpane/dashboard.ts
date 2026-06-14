@@ -71,31 +71,58 @@ export function renderDocumentView(
   opts?: DashboardOpts
 ): void {
   const goals = store.getGoals();
-  const today = store.getToday();
-  const streak = store.streak(goals.daily);
-  const seven = store.last7Days();
-  const det = store.getTodayDetail();
-  const dayFrac = goals.daily > 0 ? today / goals.daily : 0;
   const running = opts?.running ?? false;
 
   const docId = currentDoc?.id || "";
   const docName = currentDoc?.name || store.getDocName(docId) || "—";
-  const docWord = docId ? store.getDocWordCount(docId) : 0; // net, selon Word
-  const docVolume = docId ? store.getDocTotalAllTime(docId) : 0; // volume tapé
+  const docWord = docId ? store.getDocWordCount(docId) : 0; // mots du document selon Word
   const docTarget = docId ? store.getDocTarget(docId) : 0;
   const docFrac = docTarget > 0 ? docWord / docTarget : 0;
+  const docPct = docTarget > 0 ? Math.round((docWord / docTarget) * 100) : 0;
+
+  const dWord = docId ? store.getDocNetToday(docId) : 0;
+  const dProd = docId ? store.getDocProductiveToday(docId) : 0;
+  const wWord = docId ? store.getDocNetWeek(docId) : 0;
+  const wProd = docId ? store.getDocProductiveWeek(docId) : 0;
+  const seven = docId ? store.docLast7(docId) : [];
+  const calRowsData = docId ? store.docCalendarRows(docId, 4, goals.daily) : [];
+
+  const pct = (v: number, t: number) => (t > 0 ? Math.round((v / t) * 100) : 0);
+  const metric = (label: string, v: number, t: number, cls: string) =>
+    `<div class="m">
+       <div class="m-top"><span class="nm2">${label}</span><span class="vl">${v} / ${t} · ${pct(v, t)}%</span></div>
+       <div class="pbar"><i class="${cls}" style="width:${(clamp01(t > 0 ? v / t : 0) * 100).toFixed(0)}%"></i></div>
+     </div>`;
+
+  // Graphe 7 jours : empilement net (Word, conservé) + productif en plus, ligne d'objectif.
+  const goal = goals.daily;
+  const scale = Math.max(goal, ...seven.map((d) => d.prod), 1) * 1.1;
+  const chartBars = seven
+    .map((d) => {
+      const keep = Math.max(d.net, 0);
+      const extra = Math.max(d.prod - keep, 0);
+      return `<div class="cbar" title="${d.key} — Word ${d.net}, productif ${d.prod}">
+        <div class="seg-extra" style="height:${((extra / scale) * 100).toFixed(0)}%"></div>
+        <div class="seg-keep" style="height:${((keep / scale) * 100).toFixed(0)}%"></div>
+        <div class="cbl">${d.label}</div></div>`;
+    })
+    .join("");
+  const goalPos = ((goal / scale) * 100).toFixed(0);
+
+  const calRows = calRowsData
+    .map(
+      (row) =>
+        `<div class="cal-row">${row
+          .map((c) => `<span class="cal-cell lvl-${c.level}" title="${c.key} : ${c.typed}"></span>`)
+          .join("")}</div>`
+    )
+    .join("");
 
   const docBlock = docId
     ? `<div class="doc-block">
          <div class="doc-name" title="${docName}">📄 ${docName}</div>
-         <div class="doc-kpis">
-           <div><span class="doc-v">${docWord}</span><span class="doc-l">mots (Word)</span></div>
-           <div><span class="doc-v">${docVolume}</span><span class="doc-l">produit (volume)</span></div>
-         </div>
-         <div class="doc-goal">
-           <div class="doc-goal-top"><span>Objectif du document</span><span>${docWord} / ${docTarget > 0 ? docTarget : "—"}</span></div>
-           <div class="wbar"><div class="wbar-fill" style="width:${(clamp01(docFrac) * 100).toFixed(0)}%"></div></div>
-         </div>
+         <div class="doc-goal-top"><span>Mots du document (Word)</span><span>${docWord} / ${docTarget > 0 ? docTarget : "—"} · ${docPct}%</span></div>
+         <div class="wbar"><div class="wbar-fill" style="width:${(clamp01(docFrac) * 100).toFixed(0)}%"></div></div>
        </div>`
     : `<div class="doc-block doc-muted">Active le suivi pour identifier le document ouvert.</div>`;
 
@@ -109,29 +136,23 @@ export function renderDocumentView(
 
       ${docBlock}
 
-      <div class="dash-section-label">Aujourd'hui</div>
-      <div class="dash-rings">
-        <div class="dash-ring-block">
-          ${ringSvg(dayFrac, String(today), `/ ${goals.daily}`)}
-          <span class="dash-cap">Objectif du jour</span>
-        </div>
-        <div class="dash-side">
-          <div class="kpi"><span class="kpi-v">${streak}</span><span class="kpi-l">série (jours)</span></div>
-        </div>
-      </div>
+      <div class="dash-section-label">Aujourd'hui — ce document</div>
+      ${metric("Mots Word", dWord, goals.daily, "fill-word")}
+      ${metric("Mots productifs", dProd, goals.daily, "fill-prod")}
 
-      <div class="dash-section-label">7 derniers jours</div>
-      <div class="bars">${barsHtml(seven, goals.daily)}</div>
-
-      <div class="dash-section-label">Répartition du jour</div>
-      <div class="dash-card">
-        ${donutSvg(det.typed, det.pasted, det.cut)}
-        <div class="legend">
-          <span><i class="dot seg-typed"></i>Tapé ${det.typed}</span>
-          <span><i class="dot seg-pasted"></i>Collé ${det.pasted}</span>
-          <span><i class="dot seg-cut"></i>Coupé ${det.cut}</span>
-        </div>
+      <div class="dash-section-label">7 derniers jours — ce document</div>
+      <div class="chart">
+        <div class="goal-line" style="bottom:${goalPos}%"><span class="goal-tag">obj. ${goal}</span></div>
+        <div class="cbars">${chartBars}</div>
       </div>
+      <div class="legend2"><span><i class="dot seg-keep"></i>Mots Word (net)</span><span><i class="dot seg-extra"></i>Productif en plus</span></div>
+
+      <div class="dash-section-label">Cette semaine — ce document</div>
+      ${metric("Mots Word", wWord, goals.weekly, "fill-word")}
+      ${metric("Mots productifs", wProd, goals.weekly, "fill-prod")}
+
+      <div class="dash-section-label">Calendrier — 4 semaines (ce document)</div>
+      <div class="cal-rows">${calRows}</div>
     </div>
   `;
 
@@ -146,6 +167,7 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
   const week = store.getWeekTotal();
   const weekNet = store.getWeekNet();
   const grand = store.grandTotal();
+  const det = store.getTodayDetail();
   const fmt = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
   const cal = store.calendar(12, goals.daily);
   const rec = store.record();
@@ -169,24 +191,24 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
     <div class="dash">
       <div class="dash-section-label">Aujourd'hui — tous documents</div>
       <div class="kpi-row">
-        <div class="kpi"><span class="kpi-v">${todayTotal}</span><span class="kpi-l">volume tapé</span></div>
+        <div class="kpi"><span class="kpi-v">${todayTotal}</span><span class="kpi-l">productif</span></div>
         <div class="kpi"><span class="kpi-v">${fmt(todayNet)}</span><span class="kpi-l">net (Word)</span></div>
       </div>
 
       <div class="dash-section-label">Cette semaine</div>
       <div class="kpi-row">
-        <div class="kpi"><span class="kpi-v">${week}</span><span class="kpi-l">volume tapé</span></div>
+        <div class="kpi"><span class="kpi-v">${week}</span><span class="kpi-l">productif</span></div>
         <div class="kpi"><span class="kpi-v">${fmt(weekNet)}</span><span class="kpi-l">net (Word)</span></div>
       </div>
 
       <div class="week-goal">
-        <div class="week-goal-top"><span>Objectif hebdomadaire (volume)</span><span>${week} / ${goals.weekly}</span></div>
+        <div class="week-goal-top"><span>Objectif hebdomadaire (productif)</span><span>${week} / ${goals.weekly}</span></div>
         <div class="wbar"><div class="wbar-fill" style="width:${(clamp01(weekFrac) * 100).toFixed(0)}%"></div></div>
       </div>
 
       <div class="dash-section-label">Cumul</div>
       <div class="kpi-row">
-        <div class="kpi"><span class="kpi-v">${grand}</span><span class="kpi-l">volume cumulé</span></div>
+        <div class="kpi"><span class="kpi-v">${grand}</span><span class="kpi-l">productif cumulé</span></div>
       </div>
 
       <div class="dash-section-label">Calendrier (12 semaines)</div>
@@ -200,6 +222,16 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
       <div class="kpi-row">
         <div class="kpi"><span class="kpi-v">${docs}</span><span class="kpi-l">documents suivis</span></div>
         <div class="kpi"><span class="kpi-v">${activeDays}</span><span class="kpi-l">jours actifs</span></div>
+      </div>
+
+      <div class="dash-section-label">Répartition du jour (POC)</div>
+      <div class="dash-card">
+        ${donutSvg(det.typed, det.pasted, det.cut)}
+        <div class="legend">
+          <span><i class="dot seg-typed"></i>Tapé ${det.typed}</span>
+          <span><i class="dot seg-pasted"></i>Collé ${det.pasted}</span>
+          <span><i class="dot seg-cut"></i>Coupé ${det.cut}</span>
+        </div>
       </div>
     </div>
   `;

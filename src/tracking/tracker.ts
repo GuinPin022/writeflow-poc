@@ -274,9 +274,10 @@ export class WriteFlowTracker {
       if (classificationCombined === "typed") this.typedProductionCombined += delta;
       else this.pastedWordsCombined += delta;
 
-      // Persistance journaliere du tableau de bord (VOLUME) : modele EVENEMENT,
-      // ventilee PAR DOCUMENT.
-      if (classificationEvent === "typed") this.daily.addProduction(docId, delta);
+      // Tableau de bord : mots PRODUCTIFS = toutes les additions (sans distinction).
+      this.daily.addProductive(docId, delta);
+      // [POC] Ventilation fine conservee (tape vs colle) pour l'onglet POC.
+      if (classificationEvent === "typed") this.daily.addTyped(docId, delta);
       else this.daily.addPasted(docId, delta);
     } else if (delta < 0) {
       // Suppressions : compteurs communs (coupe vs effacement). Production tapee inchangee.
