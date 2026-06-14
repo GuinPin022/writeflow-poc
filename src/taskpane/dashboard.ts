@@ -1,6 +1,7 @@
 import { DailyStore } from "../tracking/dailyStore";
+import { THEMES, palierTrackerHtml } from "../tracking/paliers";
 
-/* global document, HTMLElement, HTMLInputElement, window, Blob, URL */
+/* global document, HTMLElement, HTMLInputElement, HTMLSelectElement, window, Blob, URL */
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -136,6 +137,8 @@ export function renderDocumentView(
 
       ${docBlock}
 
+      ${palierTrackerHtml(dWord, goals.daily, store.getTheme())}
+
       <div class="dash-section-label">Aujourd'hui — ce document</div>
       ${metric("Mots Word", dWord, goals.daily, "fill-word")}
       ${metric("Mots productifs", dProd, goals.daily, "fill-prod")}
@@ -241,7 +244,8 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
 export function renderSettingsView(
   container: HTMLElement,
   store: DailyStore,
-  currentDoc?: { id: string; name: string }
+  currentDoc?: { id: string; name: string },
+  onChange?: (kind: "settings" | "docTarget") => void
 ): void {
   const goals = store.getGoals();
   const docId = currentDoc?.id || "";
@@ -261,6 +265,16 @@ export function renderSettingsView(
         </label>
       </div>
 
+      <div class="dash-section-label">Apparence</div>
+      <label class="set-field">Thème des paliers
+        <select id="set-theme" class="setting-select">
+          ${Object.entries(THEMES)
+            .map(([key, t]) => `<option value="${key}" ${key === store.getTheme() ? "selected" : ""}>${t.label}</option>`)
+            .join("")}
+        </select>
+      </label>
+      <p class="hint">Change les emojis et les noms des paliers dans l'onglet Document.</p>
+
       <div class="dash-section-label">Données</div>
       <div class="actions">
         <button id="set-export">Exporter pour le dashboard web</button>
@@ -278,18 +292,29 @@ export function renderSettingsView(
   const t = container.querySelector<HTMLInputElement>("#set-doctarget");
   d?.addEventListener("change", () => {
     store.setGoals({ daily: Math.max(0, parseInt(d.value, 10) || 0) });
+    onChange?.("settings");
   });
   w?.addEventListener("change", () => {
     store.setGoals({ weekly: Math.max(0, parseInt(w.value, 10) || 0) });
+    onChange?.("settings");
   });
   t?.addEventListener("change", () => {
-    if (docId) store.setDocTarget(docId, Math.max(0, parseInt(t.value, 10) || 0));
+    if (docId) {
+      store.setDocTarget(docId, Math.max(0, parseInt(t.value, 10) || 0));
+      onChange?.("docTarget");
+    }
+  });
+  const theme = container.querySelector<HTMLSelectElement>("#set-theme");
+  theme?.addEventListener("change", () => {
+    store.setTheme(theme.value);
+    onChange?.("settings");
   });
   container.querySelector("#set-export")?.addEventListener("click", () => exportForWebDashboard());
   container.querySelector("#set-reset")?.addEventListener("click", () => {
     if (window.confirm("Effacer tout l'historique local et les objectifs ?")) {
       store.clear();
-      renderSettingsView(container, store, currentDoc);
+      onChange?.("settings");
+      renderSettingsView(container, store, currentDoc, onChange);
     }
   });
 }

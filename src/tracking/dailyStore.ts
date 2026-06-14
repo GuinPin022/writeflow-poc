@@ -15,8 +15,11 @@
 // Tout est local et hors-ligne. Par origine : localhost (dev) et github.io (testeurs)
 // sont des stockages distincts — normal.
 
+import { DEFAULT_THEME } from "./paliers";
+
 const KEY_V2 = "writeflow_v2";
 const KEY_GOALS = "writeflow_goals";
+const KEY_THEME = "writeflow_theme";
 const LEGACY_DAILY = "writeflow_daily";
 const LEGACY_DETAIL = "writeflow_daily_detail";
 export const HISTORIC_DOC = "(historique)";
@@ -445,6 +448,15 @@ export class DailyStore {
     window.localStorage.setItem(KEY_GOALS, JSON.stringify({ ...this.getGoals(), ...goals }));
   }
 
+  /** Theme des paliers gamifies (cle de THEMES). */
+  getTheme(): string {
+    return window.localStorage.getItem(KEY_THEME) || DEFAULT_THEME;
+  }
+
+  setTheme(key: string): void {
+    window.localStorage.setItem(KEY_THEME, key);
+  }
+
   /** Donnees completes d'un document (pour persistance dans les settings du fichier). */
   exportDoc(docId: string): DocData | null {
     return this.state().docs[docId] || null;
@@ -468,5 +480,6 @@ export class DailyStore {
     window.localStorage.removeItem(KEY_GOALS);
     window.localStorage.removeItem(LEGACY_DAILY);
     window.localStorage.removeItem(LEGACY_DETAIL);
+    // Le theme des paliers est une preference d'affichage : on la conserve.
   }
 }

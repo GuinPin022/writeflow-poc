@@ -8,7 +8,23 @@
     <!-- Le CSS est injecte par webpack (import dans taskpane.ts). -->
   </head>
   <body>
-    <main id="app">
+    <!-- ECRAN DE CONNEXION (affiche tant que le testeur n'est pas connecte) -->
+    <section id="auth" class="auth" hidden>
+      <h1>WriteFlow</h1>
+      <p id="auth-msg" class="status">Connecte-toi pour synchroniser tes données.</p>
+      <input id="auth-email" type="email" placeholder="email" autocomplete="username" />
+      <input id="auth-pass" type="password" placeholder="mot de passe" autocomplete="current-password" />
+      <div class="actions">
+        <button id="auth-signin" class="primary">Se connecter</button>
+        <button id="auth-signup">Créer un compte</button>
+      </div>
+      <p class="hint">Pas envie de créer un compte ? Tu peux utiliser WriteFlow en local : tes données restent sur cet appareil, rien n'est synchronisé.</p>
+      <div class="actions">
+        <button id="auth-local">Utiliser sans compte (local)</button>
+      </div>
+    </section>
+
+    <main id="app" hidden>
       <h1>WriteFlow</h1>
       <p id="status" class="status">Chargement d'Office.js…</p>
 
@@ -17,6 +33,7 @@
         <button id="tab-global" class="tab">Global</button>
         <button id="tab-settings" class="tab">Réglages</button>
         <button id="tab-poc" class="tab">POC</button>
+        <button id="logout" class="tab">Déconnexion</button>
       </nav>
 
       <!-- VUE DOCUMENT (document courant + stats du jour) -->

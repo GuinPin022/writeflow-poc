@@ -1,11 +1,38 @@
 import "./taskpane.css";
+import { Session } from "@supabase/supabase-js";
 import { WriteFlowTracker } from "../tracking/tracker";
 import { TrackerSnapshot } from "../tracking/types";
 import { renderDocumentView, renderGlobalView, renderSettingsView } from "./dashboard";
+import {
+  getSession,
+  loadAccountData,
+  signIn,
+  signOut,
+  signUp,
+  syncDocTarget,
+  syncSettings,
+  syncToday,
+} from "../supabase/client";
 
-/* global Office, document, window */
+const SKIP_LOGIN_KEY = "writeflow_skip_login";
+
+/* global Office, document, window, console */
 
 let tracker: WriteFlowTracker | null = null;
+let supaSession: Session | null = null;
+let syncTimer: number | null = null;
+
+/** Pousse vers Supabase au plus une fois toutes les 3 s (anti-rebond). */
+function scheduleSync(): void {
+  if (!tracker || !supaSession) return;
+  if (syncTimer !== null) return;
+  syncTimer = window.setTimeout(() => {
+    syncTimer = null;
+    void syncToday(tracker!.getDailyStore(), tracker!.getCurrentDoc(), supaSession!.user.id).catch(
+      (e) => console.warn("Sync Supabase echouee:", e)
+    );
+  }, 3000);
+}
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -94,6 +121,7 @@ async function toggleTracker(): Promise<void> {
     } else {
       await tracker.start();
       setStatus("Suivi actif (relevé toutes les 30 s).", "ok");
+      await syncDown(); // le document est identifie -> on charge son objectif
     }
   } catch (e) {
     setStatus(`Erreur : ${(e as Error).message}`, "err");
@@ -113,8 +141,34 @@ function renderGlobal(): void {
   if (tracker) renderGlobalView($("view-global"), tracker.getDailyStore());
 }
 
+function onSettingsChange(kind: "settings" | "docTarget"): void {
+  if (!tracker || !supaSession) return; // mode local : rien a remonter
+  const uid = supaSession.user.id;
+  const daily = tracker.getDailyStore();
+  if (kind === "docTarget") {
+    void syncDocTarget(daily, tracker.getCurrentDoc(), uid).catch((e) =>
+      console.warn("Sync cible document echouee:", e)
+    );
+  } else {
+    void syncSettings(daily, uid).catch((e) => console.warn("Sync reglages echouee:", e));
+  }
+}
+
 function renderSettings(): void {
-  if (tracker) renderSettingsView($("view-settings"), tracker.getDailyStore(), tracker.getCurrentDoc());
+  if (tracker)
+    renderSettingsView($("view-settings"), tracker.getDailyStore(), tracker.getCurrentDoc(), onSettingsChange);
+}
+
+/** Recharge depuis le compte les reglages + l'objectif du document, puis rafraichit. */
+async function syncDown(): Promise<void> {
+  if (!tracker || !supaSession) return;
+  try {
+    await loadAccountData(tracker.getDailyStore(), tracker.getCurrentDoc(), supaSession.user.id);
+  } catch (e) {
+    console.warn("Chargement des donnees du compte echoue:", e);
+  }
+  renderDoc();
+  renderGlobal();
 }
 
 function onUpdate(s: TrackerSnapshot): void {
@@ -122,6 +176,7 @@ function onUpdate(s: TrackerSnapshot): void {
   // Vues sans champ de saisie : on peut les rafraichir a chaque releve.
   renderDoc();
   renderGlobal();
+  scheduleSync(); // remontee Supabase (anti-rebond)
 }
 
 type View = "document" | "global" | "settings" | "poc";
@@ -137,11 +192,58 @@ function showView(view: View): void {
   else if (view === "settings") renderSettings(); // rendu a l'ouverture (champs de saisie)
 }
 
-Office.onReady((info) => {
+function showAuth(msg = ""): void {
+  ($("auth") as HTMLElement).hidden = false;
+  ($("app") as HTMLElement).hidden = true;
+  if (msg) $("auth-msg").textContent = msg;
+}
+
+function wireAuthButtons(): void {
+  $("auth-signin").addEventListener("click", async () => {
+    const email = ($("auth-email") as HTMLInputElement).value.trim();
+    const pass = ($("auth-pass") as HTMLInputElement).value;
+    $("auth-msg").textContent = "Connexion…";
+    const { error } = await signIn(email, pass);
+    if (error) {
+      $("auth-msg").textContent = "Erreur : " + error.message;
+      return;
+    }
+    supaSession = await getSession();
+    window.localStorage.removeItem(SKIP_LOGIN_KEY);
+    void startApp();
+  });
+  $("auth-signup").addEventListener("click", async () => {
+    const email = ($("auth-email") as HTMLInputElement).value.trim();
+    const pass = ($("auth-pass") as HTMLInputElement).value;
+    $("auth-msg").textContent = "Création du compte…";
+    const { error } = await signUp(email, pass);
+    $("auth-msg").textContent = error
+      ? "Erreur : " + error.message
+      : "Compte créé. Tu peux maintenant te connecter.";
+  });
+  $("auth-local").addEventListener("click", () => {
+    // Mode local : aucune session, tout reste sur l'appareil.
+    window.localStorage.setItem(SKIP_LOGIN_KEY, "1");
+    supaSession = null;
+    void startApp();
+  });
+}
+
+Office.onReady(async (info) => {
   if (info.host !== Office.HostType.Word) {
     setStatus("Cet add-in doit s'executer dans Word.", "err");
     return;
   }
+  wireAuthButtons();
+  supaSession = await getSession();
+  if (supaSession) void startApp();
+  else if (window.localStorage.getItem(SKIP_LOGIN_KEY)) void startApp(); // mode local memorise
+  else showAuth();
+});
+
+async function startApp(): Promise<void> {
+  ($("auth") as HTMLElement).hidden = true;
+  ($("app") as HTMLElement).hidden = false;
 
   tracker = new WriteFlowTracker({ onUpdate });
   setStatus(`Pret. Plateforme : ${Office.context.platform}.`, "ok");
@@ -165,6 +267,7 @@ Office.onReady((info) => {
     try {
       await tracker!.start();
       setStatus("Tracking demarre (releve toutes les 30 s).", "ok");
+      await syncDown(); // le document est identifie -> on charge son objectif
     } catch (e) {
       setStatus(`Erreur au demarrage : ${(e as Error).message}`, "err");
     }
@@ -196,5 +299,21 @@ Office.onReady((info) => {
     const sent = tracker!.getQueue().flush();
     setStatus(`File videe : ${sent} evenement(s) envoye(s).`, "ok");
     $("queue").textContent = String(tracker!.getQueue().pendingCount());
+    if (supaSession) {
+      void syncToday(tracker!.getDailyStore(), tracker!.getCurrentDoc(), supaSession.user.id)
+        .then(() => setStatus("Synchronisé avec Supabase.", "ok"))
+        .catch((e) => setStatus("Sync échouée : " + (e as Error).message, "err"));
+    }
   });
-});
+
+  $("logout").addEventListener("click", async () => {
+    await signOut();
+    supaSession = null;
+    window.localStorage.removeItem(SKIP_LOGIN_KEY); // on ressort du mode local aussi
+    if (tracker && tracker.isRunning()) await tracker.stop();
+    showAuth("Déconnecté.");
+  });
+
+  // Connecte : on charge les reglages globaux du compte.
+  if (supaSession) await syncDown();
+}
