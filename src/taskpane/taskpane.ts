@@ -10,7 +10,6 @@ import {
   signOut,
   signUp,
   syncDocTarget,
-  syncSettings,
   syncToday,
 } from "../supabase/client";
 
@@ -143,15 +142,12 @@ function renderGlobal(): void {
 
 function onSettingsChange(kind: "settings" | "docTarget"): void {
   if (!tracker || !supaSession) return; // mode local : rien a remonter
-  const uid = supaSession.user.id;
-  const daily = tracker.getDailyStore();
-  if (kind === "docTarget") {
-    void syncDocTarget(daily, tracker.getCurrentDoc(), uid).catch((e) =>
-      console.warn("Sync cible document echouee:", e)
-    );
-  } else {
-    void syncSettings(daily, uid).catch((e) => console.warn("Sync reglages echouee:", e));
-  }
+  // Tous les reglages (objectifs + theme) sont par document -> table `documents`.
+  // "settings" = reinitialisation locale : rien a pousser.
+  if (kind !== "docTarget") return;
+  void syncDocTarget(tracker.getDailyStore(), tracker.getCurrentDoc(), supaSession.user.id).catch((e) =>
+    console.warn("Sync reglages document echouee:", e)
+  );
 }
 
 function renderSettings(): void {

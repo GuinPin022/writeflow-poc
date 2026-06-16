@@ -78,46 +78,56 @@ export async function syncToday(
   if (error) throw error;
 }
 
-/* ---------- Reglages globaux (objectifs + theme) ---------- */
+/* ---------- Reglages PAR DOCUMENT (objectifs + theme) ---------- */
 
-/** Envoie les objectifs (quotidien/hebdo) et le theme vers `user_settings`. */
-export async function syncSettings(daily: DailyStore, userId: string): Promise<void> {
-  const goals = daily.getGoals();
-  const { error } = await supabase.from("user_settings").upsert(
-    {
-      user_id: userId,
-      daily_goal: goals.daily,
-      weekly_goal: goals.weekly,
-      theme: daily.getTheme(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" }
-  );
-  if (error) throw error;
-}
-
-/** Envoie l'objectif (cible) du document courant vers `documents`. */
+/**
+ * Envoie les reglages du document courant (objectifs quotidien/hebdo/total + theme)
+ * vers `documents`, et empile le dernier changement d'objectifs dans `goal_history`
+ * (append-only, idempotent par date).
+ */
 export async function syncDocTarget(
   daily: DailyStore,
   doc: { id: string; name: string },
   userId: string
 ): Promise<void> {
   if (!doc.id) return;
+  const g = daily.getDocGoals(doc.id);
   const { error } = await supabase.from("documents").upsert(
     {
       user_id: userId,
       doc_id: doc.id,
       doc_name: doc.name,
-      target: daily.getDocTarget(doc.id),
+      daily_goal: g.daily,
+      weekly_goal: g.weekly,
+      target: g.target,
+      theme: daily.getDocTheme(doc.id),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,doc_id" }
   );
   if (error) throw error;
+
+  // Historique : on pousse le dernier changement (clé unique user_id+doc_id+changed_at).
+  const last = daily.getLastGoalChange(doc.id);
+  if (last) {
+    const { error: hErr } = await supabase.from("goal_history").upsert(
+      {
+        user_id: userId,
+        doc_id: doc.id,
+        doc_name: doc.name,
+        daily_goal: last.daily,
+        weekly_goal: last.weekly,
+        target: last.target,
+        changed_at: last.at,
+      },
+      { onConflict: "user_id,doc_id,changed_at", ignoreDuplicates: true }
+    );
+    if (hErr) throw hErr;
+  }
 }
 
 /**
- * Charge depuis le compte les reglages globaux + l'objectif du document courant,
+ * Charge depuis le compte les reglages du document courant (objectifs + theme + historique)
  * et les applique au DailyStore local. Le cloud fait foi pour cet utilisateur.
  * S'il n'y a rien en ligne (premiere connexion), on garde les valeurs locales.
  */
@@ -126,23 +136,31 @@ export async function loadAccountData(
   doc: { id: string; name: string },
   userId: string
 ): Promise<void> {
-  const { data: s } = await supabase
-    .from("user_settings")
-    .select("daily_goal, weekly_goal, theme")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (s) {
-    daily.setGoals({ daily: s.daily_goal, weekly: s.weekly_goal });
-    if (s.theme) daily.setTheme(s.theme);
-  }
-
   if (doc.id) {
     const { data: d } = await supabase
       .from("documents")
-      .select("target")
+      .select("daily_goal, weekly_goal, target, theme")
       .eq("user_id", userId)
       .eq("doc_id", doc.id)
       .maybeSingle();
-    if (d) daily.setDocTarget(doc.id, d.target);
+    if (d) {
+      daily.setDocGoals(doc.id, { daily: d.daily_goal, weekly: d.weekly_goal, target: d.target }, false);
+      if (d.theme) daily.setDocTheme(doc.id, d.theme);
+    }
+
+    // Historique des objectifs : recharge depuis le cloud pour colorer correctement
+    // le graphe 7 jours et le calendrier selon l'objectif en vigueur a chaque date.
+    const { data: h } = await supabase
+      .from("goal_history")
+      .select("daily_goal, weekly_goal, target, changed_at")
+      .eq("user_id", userId)
+      .eq("doc_id", doc.id)
+      .order("changed_at", { ascending: true });
+    if (h?.length) {
+      daily.importGoalHistory(
+        doc.id,
+        h.map((r) => ({ at: r.changed_at, daily: r.daily_goal, weekly: r.weekly_goal, target: r.target }))
+      );
+    }
   }
 }

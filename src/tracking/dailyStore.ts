@@ -8,7 +8,7 @@
 //   { date: motsTapes }, synchronisable plus tard.
 // - Le TOTAL (tous documents) n'est pas stocke : il est calcule par agregation,
 //   ce qui evite toute incoherence.
-// - Objectifs (globaux) dans `writeflow_goals`.
+// - Objectifs (quotidien / hebdo / total) PAR DOCUMENT, stockes dans chaque doc.
 // - Migration : d'anciennes donnees a plat (`writeflow_daily`) sont versees dans un
 //   document "(historique)" pour ne rien perdre.
 //
@@ -18,7 +18,6 @@
 import { DEFAULT_THEME } from "./paliers";
 
 const KEY_V2 = "writeflow_v2";
-const KEY_GOALS = "writeflow_goals";
 const KEY_THEME = "writeflow_theme";
 const LEGACY_DAILY = "writeflow_daily";
 const LEGACY_DETAIL = "writeflow_daily_detail";
@@ -31,12 +30,21 @@ export interface DayDetail {
   net?: number; // variation nette (selon Word) du jour, signee
 }
 
-export interface Goals {
-  daily: number;
-  weekly: number;
+export interface DocGoals {
+  daily: number; // objectif quotidien (mots productifs)
+  weekly: number; // objectif hebdo (mots productifs)
+  target: number; // objectif total du document (0 = aucun)
 }
 
-export const DEFAULT_GOALS: Goals = { daily: 500, weekly: 2500 };
+/** Un changement d'objectifs daté (historique append-only). */
+export interface GoalChange {
+  at: string; // ISO timestamp du changement
+  daily: number;
+  weekly: number;
+  target: number;
+}
+
+export const DEFAULT_DOC_GOALS = { daily: 500, weekly: 2500 };
 
 export interface DayCell {
   key: string;
@@ -49,6 +57,10 @@ export interface DocData {
   daily: Record<string, number>;
   detail: Record<string, DayDetail>;
   target?: number; // objectif de mots pour le document complet (0 = aucun)
+  dailyGoal?: number; // objectif quotidien du document (mots productifs)
+  weeklyGoal?: number; // objectif hebdo du document (mots productifs)
+  goalHistory?: GoalChange[]; // historique date des objectifs (croissant par `at`)
+  theme?: string; // theme des paliers, propre au document (cle de THEMES)
   lastCount?: number; // dernier nombre de mots connu du document (selon Word)
 }
 
@@ -357,23 +369,35 @@ export class DailyStore {
     return s;
   }
 
-  /** 7 derniers jours du document : net (Word) + productif, du plus ancien au plus recent. */
-  docLast7(docId: string): Array<{ key: string; label: string; net: number; prod: number }> {
+  /**
+   * 7 derniers jours du document : net (Word) + productif + objectif EN VIGUEUR ce jour-là,
+   * du plus ancien au plus recent.
+   */
+  docLast7(docId: string): Array<{ key: string; label: string; net: number; prod: number; goal: number }> {
     const d = this.docData(docId);
     const days = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-    const out: Array<{ key: string; label: string; net: number; prod: number }> = [];
+    const out: Array<{ key: string; label: string; net: number; prod: number; goal: number }> = [];
     const dt = new Date();
     dt.setDate(dt.getDate() - 6);
     for (let i = 0; i < 7; i++) {
       const k = dateKey(dt);
-      out.push({ key: k, label: days[dt.getDay()], net: d?.detail[k]?.net || 0, prod: d?.daily[k] || 0 });
+      out.push({
+        key: k,
+        label: days[dt.getDay()],
+        net: d?.detail[k]?.net || 0,
+        prod: d?.daily[k] || 0,
+        goal: this.goalForDate(docId, k).daily,
+      });
       dt.setDate(dt.getDate() + 1);
     }
     return out;
   }
 
-  /** Calendrier du document en LIGNES de semaine (weeks x 7 jours, Lun->Dim), intensite = productif. */
-  docCalendarRows(docId: string, weeks: number, dailyGoal: number): DayCell[][] {
+  /**
+   * Calendrier du document en LIGNES de semaine (weeks x 7 jours, Lun->Dim).
+   * Intensite = productif comparé à l'objectif quotidien EN VIGUEUR à chaque date.
+   */
+  docCalendarRows(docId: string, weeks: number): DayCell[][] {
     const d = this.docData(docId);
     const end = new Date();
     const dow = (end.getDay() + 6) % 7;
@@ -388,7 +412,7 @@ export class DailyStore {
       for (let day = 0; day < 7; day++) {
         const k = dateKey(cur);
         const typed = d?.daily[k] || 0;
-        row.push({ key: k, typed, level: this.level(typed, dailyGoal) });
+        row.push({ key: k, typed, level: this.level(typed, this.goalForDate(docId, k).daily) });
         cur.setDate(cur.getDate() + 1);
       }
       rows.push(row);
@@ -396,8 +420,14 @@ export class DailyStore {
     return rows;
   }
 
-  getDocTarget(docId: string): number {
-    return this.state().docs[docId]?.target || 0;
+  /** Objectifs du document : quotidien, hebdo (mots productifs) et total. */
+  getDocGoals(docId: string): DocGoals {
+    const d = this.state().docs[docId];
+    return {
+      daily: d?.dailyGoal ?? DEFAULT_DOC_GOALS.daily,
+      weekly: d?.weeklyGoal ?? DEFAULT_DOC_GOALS.weekly,
+      target: d?.target ?? 0,
+    };
   }
 
   /** Nombre de mots actuel du document (net, selon Word). */
@@ -427,34 +457,89 @@ export class DailyStore {
     return s;
   }
 
-  setDocTarget(docId: string, n: number): void {
+  /**
+   * Met à jour les objectifs du document. `record = false` applique les valeurs SANS
+   * historiser (ex : hydratation depuis le cloud, où l'historique est chargé à part).
+   */
+  setDocGoals(docId: string, g: Partial<DocGoals>, record = true): void {
     const st = this.state();
     const d = this.ensureDoc(st, docId);
-    d.target = Math.max(0, n);
+    if (typeof g.daily === "number") d.dailyGoal = Math.max(0, g.daily);
+    if (typeof g.weekly === "number") d.weeklyGoal = Math.max(0, g.weekly);
+    if (typeof g.target === "number") d.target = Math.max(0, g.target);
+    if (!record) {
+      this.save(st);
+      return;
+    }
+    // Historique : on empile un instantané si les valeurs ont changé.
+    const snap: GoalChange = {
+      at: new Date().toISOString(),
+      daily: d.dailyGoal ?? DEFAULT_DOC_GOALS.daily,
+      weekly: d.weeklyGoal ?? DEFAULT_DOC_GOALS.weekly,
+      target: d.target ?? 0,
+    };
+    const hist = d.goalHistory ?? (d.goalHistory = []);
+    const last = hist[hist.length - 1];
+    if (!last || last.daily !== snap.daily || last.weekly !== snap.weekly || last.target !== snap.target) {
+      hist.push(snap);
+    }
     this.save(st);
   }
 
-  // ---------- Objectifs & maintenance ----------
-
-  getGoals(): Goals {
-    const g = readRaw<number>(KEY_GOALS) as unknown as Partial<Goals>;
-    return {
-      daily: typeof g.daily === "number" ? g.daily : DEFAULT_GOALS.daily,
-      weekly: typeof g.weekly === "number" ? g.weekly : DEFAULT_GOALS.weekly,
-    };
+  /**
+   * Objectifs EN VIGUEUR à une date donnée (AAAA-MM-JJ), d'après l'historique.
+   * Renvoie 0 si aucun objectif n'était défini ce jour-là (avant le 1er réglage, ou
+   * document sans objectif) : on ne dessine donc pas d'objectif sur un passé qui n'en avait pas.
+   * Pour les jours sans activité APRÈS un réglage, le dernier objectif est reporté (escalier).
+   */
+  goalForDate(docId: string, day: string): DocGoals {
+    const hist = this.state().docs[docId]?.goalHistory;
+    const ZERO: DocGoals = { daily: 0, weekly: 0, target: 0 };
+    // Aucun objectif jamais défini, ou date antérieure au 1er objectif défini -> 0.
+    if (!hist || !hist.length || dateKey(new Date(hist[0].at)) > day) return ZERO;
+    let chosen = hist[0];
+    for (const h of hist) {
+      if (dateKey(new Date(h.at)) <= day) chosen = h;
+      else break;
+    }
+    return { daily: chosen.daily, weekly: chosen.weekly, target: chosen.target };
   }
 
-  setGoals(goals: Partial<Goals>): void {
-    window.localStorage.setItem(KEY_GOALS, JSON.stringify({ ...this.getGoals(), ...goals }));
+  /** Dernier changement d'objectifs (pour remontée Supabase). */
+  getLastGoalChange(docId: string): GoalChange | null {
+    const h = this.state().docs[docId]?.goalHistory;
+    return h && h.length ? h[h.length - 1] : null;
   }
 
-  /** Theme des paliers gamifies (cle de THEMES). */
-  getTheme(): string {
+  /** Fusionne un historique (ex : chargé depuis Supabase), trié et dédupliqué par `at`. */
+  importGoalHistory(docId: string, entries: GoalChange[]): void {
+    if (!entries.length) return;
+    const st = this.state();
+    const d = this.ensureDoc(st, docId);
+    const seen = new Set<string>();
+    d.goalHistory = [...(d.goalHistory ?? []), ...entries]
+      .filter((e) => (seen.has(e.at) ? false : (seen.add(e.at), true)))
+      .sort((a, b) => a.at.localeCompare(b.at));
+    this.save(st);
+  }
+
+  // ---------- Theme (PAR DOCUMENT) & maintenance ----------
+
+  /**
+   * Theme des paliers gamifies (cle de THEMES) du document.
+   * Repli pour les anciens docs : ancien theme global (`writeflow_theme`) puis defaut.
+   */
+  getDocTheme(docId: string): string {
+    const d = this.state().docs[docId];
+    if (d?.theme) return d.theme;
     return window.localStorage.getItem(KEY_THEME) || DEFAULT_THEME;
   }
 
-  setTheme(key: string): void {
-    window.localStorage.setItem(KEY_THEME, key);
+  setDocTheme(docId: string, key: string): void {
+    const st = this.state();
+    const d = this.ensureDoc(st, docId);
+    d.theme = key;
+    this.save(st);
   }
 
   /** Donnees completes d'un document (pour persistance dans les settings du fichier). */
@@ -470,6 +555,10 @@ export class DailyStore {
       daily: data.daily || {},
       detail: data.detail || {},
       target: data.target,
+      dailyGoal: data.dailyGoal,
+      weeklyGoal: data.weeklyGoal,
+      goalHistory: data.goalHistory,
+      theme: data.theme,
       lastCount: data.lastCount,
     };
     this.save(st);
@@ -477,7 +566,7 @@ export class DailyStore {
 
   clear(): void {
     window.localStorage.removeItem(KEY_V2);
-    window.localStorage.removeItem(KEY_GOALS);
+    window.localStorage.removeItem("writeflow_goals"); // ancien objectif global (supprime)
     window.localStorage.removeItem(LEGACY_DAILY);
     window.localStorage.removeItem(LEGACY_DETAIL);
     // Le theme des paliers est une preference d'affichage : on la conserve.

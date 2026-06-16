@@ -173,7 +173,7 @@ export class WriteFlowTracker {
   static countWords(text: string): number {
     if (!text) return 0;
     const tokens = text
-      .replace(/[ ]/g, " ") // espaces insecables
+      .replace(/[\u00A0]/g, " ") // espaces insecables
       .trim()
       .split(/\s+/)
       .filter((t) => /[\p{L}\p{N}]/u.test(t)); // garde ce qui contient lettre/chiffre
@@ -248,7 +248,7 @@ export class WriteFlowTracker {
     try {
       read = await this.readDocument();
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.error("Echec releve Word:", e);
       return;
     }
@@ -381,7 +381,7 @@ export class WriteFlowTracker {
     const supports15 =
       Office.context.requirements && Office.context.requirements.isSetSupported("WordApi", "1.5");
     if (!supports15) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         "WordApi 1.5 non supporte sur cette plateforme : mode polling seul. " +
           "Resultat a documenter dans la matrice cross-plateforme."
@@ -399,7 +399,7 @@ export class WriteFlowTracker {
         await context.sync();
       });
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.warn("Enregistrement des evenements paragraphe echoue, polling seul:", e);
     }
 

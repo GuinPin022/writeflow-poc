@@ -10,7 +10,7 @@ export class TrackLogger {
   add(event: TrackEvent): void {
     this.events.push(event);
     // Visible en direct dans la console (F12) pendant les tests.
-    // eslint-disable-next-line no-console
+     
     console.log(
       `[#${event.tick}] ${event.source} | total=${event.totalWords} delta=${event.delta} ` +
         `dt=${event.msSinceLastEvent}ms ` +
@@ -31,7 +31,7 @@ export class TrackLogger {
 
   /** Affiche un tableau recapitulatif dans la console. */
   table(): void {
-    // eslint-disable-next-line no-console
+     
     console.table(this.events);
   }
 
