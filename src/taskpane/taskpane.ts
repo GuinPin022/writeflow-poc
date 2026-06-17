@@ -256,16 +256,8 @@ async function startApp(): Promise<void> {
     /* evenement non supporte sur cette plateforme : theme applique au chargement */
   }
 
-  // Bouton vers le tableau de bord web (ouvre le navigateur systeme).
-  const DASHBOARD_URL = "https://guinpin022.github.io/writeflow-poc/dashboard/";
-  $("open-dashboard").addEventListener("click", () => {
-    try {
-      // Methode fiable dans Office (volet en iframe) ; repli sur window.open.
-      Office.context.ui.openBrowserWindow(DASHBOARD_URL);
-    } catch {
-      window.open(DASHBOARD_URL, "_blank");
-    }
-  });
+  // Le bouton "Tableau de bord" est un vrai lien <a target="_blank"> dans le HTML :
+  // c'est la methode fiable pour ouvrir le navigateur systeme depuis un add-in Office.
 
   $("tab-document").addEventListener("click", () => showView("document"));
   $("tab-global").addEventListener("click", () => showView("global"));

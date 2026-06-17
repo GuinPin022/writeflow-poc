@@ -25,6 +25,7 @@ h1 { font-size: 16px; margin: 0 0 4px; color: var(--accent); }
 .app-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
 .app-head h1 { margin: 0; }
 .dash-link {
+  display: inline-block; text-decoration: none;
   font-size: 12px; font-weight: 600; cursor: pointer;
   border: 1px solid var(--accent); color: var(--accent); background: transparent;
   border-radius: 6px; padding: 4px 9px; white-space: nowrap;
