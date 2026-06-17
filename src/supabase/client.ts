@@ -78,6 +78,53 @@ export async function syncToday(
   if (error) throw error;
 }
 
+/**
+ * Pousse TOUS les jours connus localement pour le document courant (pas seulement
+ * aujourd'hui). Sert de rattrapage : si un testeur a ecrit hors-ligne et revient un
+ * AUTRE jour, syncToday n'aurait jamais remonte les jours passes. A appeler aux moments
+ * "rattrapage" (connexion / demarrage / reconnexion), pas a chaque frappe.
+ *
+ * Upsert groupe sur la meme cle (user_id, doc_id, day) : idempotent et auto-reparateur,
+ * donc sans risque pour les lignes deja en ligne.
+ */
+export async function syncAll(
+  daily: DailyStore,
+  doc: { id: string; name: string },
+  userId: string
+): Promise<void> {
+  if (!doc.id) return;
+
+  const data = daily.exportDoc(doc.id);
+  if (!data) return;
+
+  // Union des jours presents cote productif ET cote detail.
+  const days = new Set<string>([...Object.keys(data.daily), ...Object.keys(data.detail)]);
+  if (days.size === 0) return;
+
+  const now = new Date().toISOString();
+  const rows = [...days].map((day) => {
+    const det = data.detail[day] ?? { typed: 0, pasted: 0, cut: 0 };
+    return {
+      user_id: userId,
+      doc_id: doc.id,
+      doc_name: doc.name,
+      day,
+      productive: data.daily[day] ?? 0,
+      typed: det.typed ?? 0,
+      pasted: det.pasted ?? 0,
+      cut: det.cut ?? 0,
+      net: det.net ?? 0,
+      updated_at: now,
+    };
+  });
+
+  const { error } = await supabase
+    .from("daily_stats")
+    .upsert(rows, { onConflict: "user_id,doc_id,day" });
+
+  if (error) throw error;
+}
+
 /* ---------- Reglages PAR DOCUMENT (objectifs + theme) ---------- */
 
 /**

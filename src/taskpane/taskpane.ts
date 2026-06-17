@@ -9,6 +9,7 @@ import {
   signIn,
   signOut,
   signUp,
+  syncAll,
   syncDocTarget,
   syncToday,
 } from "../supabase/client";
@@ -160,6 +161,9 @@ async function syncDown(): Promise<void> {
   if (!tracker || !supaSession) return;
   try {
     await loadAccountData(tracker.getDailyStore(), tracker.getCurrentDoc(), supaSession.user.id);
+    // Rattrapage montant : pousse TOUS les jours locaux (jours hors-ligne passes inclus),
+    // pas seulement aujourd'hui. Idempotent, donc sans risque.
+    await syncAll(tracker.getDailyStore(), tracker.getCurrentDoc(), supaSession.user.id);
   } catch (e) {
     console.warn("Chargement des donnees du compte echoue:", e);
   }
@@ -252,6 +256,17 @@ async function startApp(): Promise<void> {
     /* evenement non supporte sur cette plateforme : theme applique au chargement */
   }
 
+  // Bouton vers le tableau de bord web (ouvre le navigateur systeme).
+  const DASHBOARD_URL = "https://guinpin022.github.io/writeflow-poc/dashboard/";
+  $("open-dashboard").addEventListener("click", () => {
+    try {
+      // Methode fiable dans Office (volet en iframe) ; repli sur window.open.
+      Office.context.ui.openBrowserWindow(DASHBOARD_URL);
+    } catch {
+      window.open(DASHBOARD_URL, "_blank");
+    }
+  });
+
   $("tab-document").addEventListener("click", () => showView("document"));
   $("tab-global").addEventListener("click", () => showView("global"));
   $("tab-settings").addEventListener("click", () => showView("settings"));
@@ -296,7 +311,8 @@ async function startApp(): Promise<void> {
     setStatus(`File videe : ${sent} evenement(s) envoye(s).`, "ok");
     $("queue").textContent = String(tracker!.getQueue().pendingCount());
     if (supaSession) {
-      void syncToday(tracker!.getDailyStore(), tracker!.getCurrentDoc(), supaSession.user.id)
+      // "Vider la file" = rattrapage : on pousse TOUS les jours locaux, pas juste aujourd'hui.
+      void syncAll(tracker!.getDailyStore(), tracker!.getCurrentDoc(), supaSession.user.id)
         .then(() => setStatus("Synchronisé avec Supabase.", "ok"))
         .catch((e) => setStatus("Sync échouée : " + (e as Error).message, "err"));
     }

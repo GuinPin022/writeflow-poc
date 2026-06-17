@@ -31,6 +31,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Dashboard React (sous-projet) -> publie sous /dashboard sur la meme Pages.
+      - name: Build dashboard
+        working-directory: dashboard
+        run: npm ci && npm run build
+
+      - name: Copy dashboard into Pages output
+        run: |
+          mkdir -p dist/dashboard
+          cp -r dashboard/dist/* dist/dashboard/
+
       # Genere le manifeste cloud avec la vraie URL GitHub Pages (owner + repo),
       # pour qu'il soit telechargeable a https://OWNER.github.io/REPO/manifest.github.xml
       - name: Generate hosted manifest
