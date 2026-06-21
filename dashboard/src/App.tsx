@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
@@ -25,21 +25,26 @@ export default function App() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Recharge les donnees depuis Supabase (appele au demarrage et apres une ecriture).
+  const reload = useCallback(async () => {
+    if (!session) return;
+    setLoadErr(null);
+    try {
+      const m = await loadModels(session.user.id);
+      setModels(m);
+    } catch (e) {
+      setLoadErr(e instanceof Error ? e.message : String(e));
+    }
+  }, [session]);
+
   // Chargement des donnees quand on est connecte.
   useEffect(() => {
     if (!session) {
       setModels(null);
       return;
     }
-    let cancelled = false;
-    setLoadErr(null);
-    loadModels(session.user.id)
-      .then((m) => !cancelled && setModels(m))
-      .catch((e) => !cancelled && setLoadErr(e.message || String(e)));
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
+    void reload();
+  }, [session, reload]);
 
   if (!authReady) return <div className="center-note">Chargement…</div>;
   if (!session) return <Login />;
@@ -49,7 +54,16 @@ export default function App() {
 
   return (
     <Routes>
-      <Route element={<Layout email={session.user.email || ""} models={models} />}>
+      <Route
+        element={
+          <Layout
+            email={session.user.email || ""}
+            models={models}
+            userId={session.user.id}
+            reload={reload}
+          />
+        }
+      >
         <Route index element={<Overview />} />
         <Route path="table" element={<TablePage />} />
         <Route path="settings" element={<SettingsPage />} />

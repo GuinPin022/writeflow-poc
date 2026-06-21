@@ -9,6 +9,17 @@ export interface Tier {
 
 export const DEFAULT_THEME = "brume-onde";
 
+/** Libelles lisibles des themes pour le selecteur des Parametres. */
+export const THEME_LABELS: Record<string, string> = {
+  "brume-onde": "Brume & Onde (fantasy)",
+  technologie: "Technologie",
+  medieval: "Médiéval",
+  science: "Science",
+  romance: "Romance",
+  fantastique: "Fantastique",
+  meteo: "Météo",
+};
+
 export const THEMES: Record<string, Tier[]> = {
   "brume-onde": [
     { p: 25, e: "🔱", n: "Recrue" },

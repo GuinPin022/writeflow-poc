@@ -12,12 +12,24 @@ interface Ctx {
   models: DocModel[];
   sel: Sel;
   range: DateRange;
+  userId: string;
+  reload: () => Promise<void>;
 }
 export function usePage(): Ctx {
   return useOutletContext<Ctx>();
 }
 
-export default function Layout({ email, models }: { email: string; models: DocModel[] }) {
+export default function Layout({
+  email,
+  models,
+  userId,
+  reload,
+}: {
+  email: string;
+  models: DocModel[];
+  userId: string;
+  reload: () => Promise<void>;
+}) {
   const [sel, setSel] = useState<Sel>(models[0] ? models[0].id : "all");
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const onTable = useLocation().pathname === "/table";
@@ -100,7 +112,7 @@ export default function Layout({ email, models }: { email: string; models: DocMo
           Aucune donnée pour ce compte. Active le suivi dans l'add-in Word, puis reviens ici.
         </div>
       ) : (
-        <Outlet context={{ models, sel, range } satisfies Ctx} />
+        <Outlet context={{ models, sel, range, userId, reload } satisfies Ctx} />
       )}
     </div>
   );

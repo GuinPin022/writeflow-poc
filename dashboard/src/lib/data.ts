@@ -125,6 +125,70 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
   return [...docs.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/* ===================== Ecriture des reglages (Parametres) ===================== */
+/** Champs modifiables d'un document depuis la page Parametres. */
+export type DocSettingsPatch = Partial<{
+  dailyGoal: number;
+  weeklyGoal: number;
+  target: number;
+  deadline: string; // "" = efface l'echeance
+  theme: string;
+}>;
+
+/**
+ * Enregistre les reglages d'un document (objectifs/echeance/theme) cote Supabase.
+ * - upsert partiel dans `documents` (ne touche pas word_count) ;
+ * - si un objectif (quotidien/hebdo/total) change, empile une entree datee dans
+ *   `goal_history`, comme le fait le plugin, pour garder la coloration "objectif
+ *   en vigueur" correcte sur les graphes/calendriers.
+ */
+export async function saveDocSettings(
+  userId: string,
+  doc: DocModel,
+  patch: DocSettingsPatch
+): Promise<void> {
+  const daily = patch.dailyGoal ?? doc.dailyGoal;
+  const weekly = patch.weeklyGoal ?? doc.weeklyGoal;
+  const target = patch.target ?? doc.target;
+  const deadline = patch.deadline !== undefined ? patch.deadline : doc.deadline;
+  const theme = patch.theme ?? doc.theme;
+  const now = new Date().toISOString();
+
+  const { error } = await supabase.from("documents").upsert(
+    {
+      user_id: userId,
+      doc_id: doc.id,
+      doc_name: doc.name,
+      daily_goal: daily,
+      weekly_goal: weekly,
+      target,
+      deadline: deadline || null,
+      theme,
+      updated_at: now,
+    },
+    { onConflict: "user_id,doc_id" }
+  );
+  if (error) throw error;
+
+  const goalChanged =
+    patch.dailyGoal !== undefined || patch.weeklyGoal !== undefined || patch.target !== undefined;
+  if (goalChanged) {
+    const { error: hErr } = await supabase.from("goal_history").upsert(
+      {
+        user_id: userId,
+        doc_id: doc.id,
+        doc_name: doc.name,
+        daily_goal: daily,
+        weekly_goal: weekly,
+        target,
+        changed_at: now,
+      },
+      { onConflict: "user_id,doc_id,changed_at", ignoreDuplicates: true }
+    );
+    if (hErr) throw hErr;
+  }
+}
+
 /* ===================== Agregation (doc courant ou "Tous") ===================== */
 export function activeDocs(models: DocModel[], sel: Sel): DocModel[] {
   return sel === "all" ? models : models.filter((d) => d.id === sel);
