@@ -1,9 +1,8 @@
 import { useState, ReactNode } from "react";
 import { usePage } from "./Layout";
-import { Tier, tierIndex } from "../lib/paliers";
+import { Tier } from "../lib/paliers";
 import {
   DocModel,
-  DayData,
   Sel,
   fmt,
   dkey,
@@ -20,6 +19,11 @@ import {
   badgeForDoc,
   bestBadgeOfDoc,
   bestBadgeAggDay,
+  streakNow,
+  recordStreak,
+  qWritten,
+  qPalier,
+  qGoal,
 } from "../lib/data";
 
 /* ---------- badges ---------- */
@@ -344,50 +348,8 @@ function BadgeCalendar({ models, sel }: { models: DocModel[]; sel: Sel }) {
 }
 
 /* ---------- mini stats ---------- */
-// Un critere decide si un jour "compte" pour une serie.
-type DayQualifier = (c: DayData) => boolean;
-const qWritten: DayQualifier = (c) => c.prod > 0; // a ecrit quelque chose
-const qPalier: DayQualifier = (c) => tierIndex(c.net, c.goal) >= 0; // >= 1er palier (25 %)
-const qGoal: DayQualifier = (c) => c.goal > 0 && c.net >= c.goal; // objectif quotidien atteint
-
-/** Serie en cours : jours consecutifs (depuis aujourd'hui) qui remplissent le critere. */
-function streakNow(models: DocModel[], sel: Sel, q: DayQualifier): number {
-  let s = 0;
-  const dt = new Date();
-  const today = aggDay(models, sel, dkey(dt));
-  // Aujourd'hui en cours : s'il ne compte pas encore, on ne casse pas la serie.
-  if (!(today && q(today))) dt.setDate(dt.getDate() - 1);
-  for (;;) {
-    const c = aggDay(models, sel, dkey(dt));
-    if (c && q(c)) {
-      s++;
-      dt.setDate(dt.getDate() - 1);
-    } else break;
-  }
-  return s;
-}
-
-/** Record : plus longue serie de jours calendaires consecutifs remplissant le critere. */
-function recordStreak(models: DocModel[], sel: Sel, keys: string[], q: DayQualifier): number {
-  let best = 0,
-    cur = 0;
-  let prev: string | null = null;
-  for (const k of keys) {
-    const c = dayAgg(models, sel, k);
-    if (!q(c)) {
-      cur = 0;
-      prev = k;
-      continue;
-    }
-    if (prev !== null) {
-      const gap = (parseKey(k).getTime() - parseKey(prev).getTime()) / 86400000;
-      cur = gap === 1 ? cur + 1 : 1;
-    } else cur = 1;
-    if (cur > best) best = cur;
-    prev = k;
-  }
-  return best;
-}
+// Les series (streakNow / recordStreak) et leurs criteres (qWritten/qPalier/qGoal)
+// vivent desormais dans lib/data.ts, partages avec la page de profil public.
 
 /* ===================== Page ===================== */
 export default function Overview() {

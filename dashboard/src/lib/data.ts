@@ -16,7 +16,9 @@ export interface DocModel {
   wordCount?: number; // compte de mots absolu courant (selon Word), absent = inconnu
   dailyGoal: number; // objectif quotidien courant (defaut si pas d'historique)
   weeklyGoal: number; // objectif hebdo courant
-  hidden: boolean; // masque : exclu du selecteur et de l'agregat "Tous"
+  hidden: boolean; // masque : exclu du selecteur et de l'agregat "Tous" (MON dashboard)
+  publicHidden: boolean; // retire de MON profil public (independant de hidden)
+  publicTitle?: string; // titre affiche publiquement (absent = non partage individuellement)
   isDefault: boolean; // document charge par defaut au demarrage du dashboard
   days: Record<string, DayData>;
 }
@@ -57,7 +59,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     supabase
       .from("documents")
       .select(
-        "doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme, hidden, is_default"
+        "doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme, hidden, public_hidden, public_title, is_default"
       )
       .eq("user_id", userId),
     supabase
@@ -83,6 +85,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
         dailyGoal: 500,
         weeklyGoal: 2500,
         hidden: false,
+        publicHidden: false,
         isDefault: false,
         days: {},
       };
@@ -102,6 +105,8 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     d.dailyGoal = Number(r.daily_goal) || 500;
     d.weeklyGoal = Number(r.weekly_goal) || 2500;
     d.hidden = !!r.hidden;
+    d.publicHidden = !!r.public_hidden;
+    d.publicTitle = r.public_title || undefined;
     d.isDefault = !!r.is_default;
   }
 
@@ -209,6 +214,50 @@ export async function saveDocSettings(
 export async function setDocHidden(userId: string, doc: DocModel, hidden: boolean): Promise<void> {
   const { error } = await supabase.from("documents").upsert(
     { user_id: userId, doc_id: doc.id, doc_name: doc.name, hidden, updated_at: new Date().toISOString() },
+    { onConflict: "user_id,doc_id" }
+  );
+  if (error) throw error;
+}
+
+/**
+ * Retire/remet un document dans le PROFIL PUBLIC (independant de `hidden`).
+ * Upsert partiel : ne touche que public_hidden.
+ */
+export async function setDocPublicHidden(
+  userId: string,
+  doc: DocModel,
+  publicHidden: boolean
+): Promise<void> {
+  const { error } = await supabase.from("documents").upsert(
+    {
+      user_id: userId,
+      doc_id: doc.id,
+      doc_name: doc.name,
+      public_hidden: publicHidden,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,doc_id" }
+  );
+  if (error) throw error;
+}
+
+/**
+ * Definit le TITRE PUBLIC d'un document (vide = retire le titre => non partage
+ * individuellement). Upsert partiel : ne touche que public_title.
+ */
+export async function setDocPublicTitle(
+  userId: string,
+  doc: DocModel,
+  title: string
+): Promise<void> {
+  const { error } = await supabase.from("documents").upsert(
+    {
+      user_id: userId,
+      doc_id: doc.id,
+      doc_name: doc.name,
+      public_title: title.trim() || null,
+      updated_at: new Date().toISOString(),
+    },
     { onConflict: "user_id,doc_id" }
   );
   if (error) throw error;
@@ -545,4 +594,52 @@ export function bestBadgeAggDay(models: DocModel[], sel: Sel, k: string): Tier |
 
 export function fmt(n: number): string {
   return (Math.round(n) || 0).toLocaleString("fr-FR");
+}
+
+/* ===================== Series (streaks) ===================== */
+// Un critere decide si un jour "compte" pour une serie.
+// Partage entre la Vue d'ensemble (dashboard) et la page de profil public,
+// pour que les deux affichent EXACTEMENT le meme calcul.
+export type DayQualifier = (c: DayData) => boolean;
+export const qWritten: DayQualifier = (c) => c.prod > 0; // a ecrit quelque chose
+export const qPalier: DayQualifier = (c) => tierIndex(c.net, c.goal) >= 0; // >= 1er palier (25 %)
+export const qGoal: DayQualifier = (c) => c.goal > 0 && c.net >= c.goal; // objectif quotidien atteint
+
+/** Serie en cours : jours consecutifs (depuis aujourd'hui) qui remplissent le critere. */
+export function streakNow(models: DocModel[], sel: Sel, q: DayQualifier): number {
+  let s = 0;
+  const dt = new Date();
+  const today = aggDay(models, sel, dkey(dt));
+  // Aujourd'hui en cours : s'il ne compte pas encore, on ne casse pas la serie.
+  if (!(today && q(today))) dt.setDate(dt.getDate() - 1);
+  for (;;) {
+    const c = aggDay(models, sel, dkey(dt));
+    if (c && q(c)) {
+      s++;
+      dt.setDate(dt.getDate() - 1);
+    } else break;
+  }
+  return s;
+}
+
+/** Record : plus longue serie de jours calendaires consecutifs remplissant le critere. */
+export function recordStreak(models: DocModel[], sel: Sel, keys: string[], q: DayQualifier): number {
+  let best = 0,
+    cur = 0;
+  let prev: string | null = null;
+  for (const k of keys) {
+    const c = dayAgg(models, sel, k);
+    if (!q(c)) {
+      cur = 0;
+      prev = k;
+      continue;
+    }
+    if (prev !== null) {
+      const gap = (parseKey(k).getTime() - parseKey(prev).getTime()) / 86400000;
+      cur = gap === 1 ? cur + 1 : 1;
+    } else cur = 1;
+    if (cur > best) best = cur;
+    prev = k;
+  }
+  return best;
 }

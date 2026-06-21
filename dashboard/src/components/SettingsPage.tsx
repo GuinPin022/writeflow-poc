@@ -1,11 +1,14 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { usePage } from "./Layout";
+import { loadMyProfile } from "../lib/profile";
 import {
   DocModel,
   DocSettingsPatch,
   ImportRow,
   saveDocSettings,
   setDocHidden,
+  setDocPublicHidden,
+  setDocPublicTitle,
   setDefaultDoc,
   deleteDoc,
   parseHistoryCsv,
@@ -94,10 +97,12 @@ function DocCard({
   doc,
   userId,
   reload,
+  profilePublic,
 }: {
   doc: DocModel;
   userId: string;
   reload: () => Promise<void>;
+  profilePublic: boolean;
 }) {
   const [state, setState] = useState<SaveState>("idle");
 
@@ -171,6 +176,8 @@ function DocCard({
           {doc.name}
           {doc.isDefault && <span className="tag-default">par défaut</span>}
           {doc.hidden && <span className="tag-hidden">masqué</span>}
+          {doc.publicHidden && <span className="tag-hidden">hors profil public</span>}
+          {profilePublic && !doc.publicHidden && <span className="tag-public">public</span>}
         </h2>
         <span className={"save-state " + state}>
           {state === "saving"
@@ -240,6 +247,18 @@ function DocCard({
             ))}
           </select>
         </label>
+        <label>
+          Titre public
+          <input
+            type="text"
+            defaultValue={doc.publicTitle ?? ""}
+            placeholder="(non partagé individuellement)"
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v !== (doc.publicTitle ?? "")) run(() => setDocPublicTitle(userId, doc, v));
+            }}
+          />
+        </label>
       </div>
       <div className="doc-actions">
         <button
@@ -250,6 +269,13 @@ function DocCard({
         </button>
         <button className="btn" onClick={() => run(() => setDocHidden(userId, doc, !doc.hidden))}>
           {doc.hidden ? "Réafficher" : "Masquer"}
+        </button>
+        <button
+          className="btn"
+          title="N'affecte que ce que voient les autres sur ton profil public"
+          onClick={() => run(() => setDocPublicHidden(userId, doc, !doc.publicHidden))}
+        >
+          {doc.publicHidden ? "Inclure dans mon profil public" : "Masquer de mon profil public"}
         </button>
         <label className="btn file-btn">
           Importer historique
@@ -266,18 +292,28 @@ function DocCard({
 
 export default function SettingsPage() {
   const { models, userId, reload } = usePage();
+  // Etat "profil public" du compte : sert a afficher le badge "public" par document.
+  const [profilePublic, setProfilePublic] = useState(false);
+  useEffect(() => {
+    loadMyProfile(userId)
+      .then((p) => setProfilePublic(!!p?.is_public))
+      .catch(() => setProfilePublic(false));
+  }, [userId]);
+
   return (
     <>
       <h1 className="page">Paramètres des documents</h1>
       <ImportNewDoc userId={userId} reload={reload} />
       {models.length === 0 && <div className="empty-note">Aucun document.</div>}
       {models.map((d) => (
-        <DocCard key={d.id} doc={d} userId={userId} reload={reload} />
+        <DocCard key={d.id} doc={d} userId={userId} reload={reload} profilePublic={profilePublic} />
       ))}
       <p style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>
         Un document « par défaut » est celui chargé au démarrage du dashboard. Un document « masqué »
-        n'apparaît plus dans le sélecteur ni dans « Tous les documents », mais reste listé ici pour
-        être réaffiché. Suppression et import historique arriveront ensuite.
+        n'apparaît plus dans le sélecteur ni dans « Tous les documents » (ton dashboard), mais reste
+        listé ici pour être réaffiché. « Masquer de mon profil public » est indépendant : le document
+        reste dans ton dashboard mais n'est plus compté dans ce que voient les autres sur ton profil
+        public.
       </p>
     </>
   );

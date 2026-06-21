@@ -8,8 +8,22 @@ import Layout from "./components/Layout";
 import Overview from "./components/Overview";
 import TablePage from "./components/TablePage";
 import SettingsPage from "./components/SettingsPage";
+import ProfilePage from "./components/ProfilePage";
+import PublicProfile from "./components/PublicProfile";
+import Explore from "./components/Explore";
 
 export default function App() {
+  return (
+    <Routes>
+      {/* Page publique : visible SANS connexion (hors du verrou de login). */}
+      <Route path="/u/:username" element={<PublicProfile />} />
+      {/* Tout le reste : application privee, derriere la connexion. */}
+      <Route path="/*" element={<PrivateApp />} />
+    </Routes>
+  );
+}
+
+function PrivateApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [models, setModels] = useState<DocModel[] | null>(null);
@@ -67,6 +81,8 @@ export default function App() {
         <Route index element={<Overview />} />
         <Route path="table" element={<TablePage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="explore" element={<Explore />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

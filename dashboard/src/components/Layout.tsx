@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useOutletContext, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { DocModel, Sel } from "../lib/data";
+import { canSeeExplore } from "../lib/admin";
 
 /** Plage de dates (AAAA-MM-JJ) du filtre Tableau ; "" = borne non définie. */
 export interface DateRange {
@@ -38,7 +39,13 @@ export default function Layout({
     return visible[0] ? visible[0].id : "all";
   });
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
-  const onTable = useLocation().pathname === "/table";
+  const path = useLocation().pathname;
+  const onTable = path === "/table";
+  // Le selecteur de document n'a de sens que la ou on consulte des stats par doc.
+  // (Pas sur Profil : la vue par document se passe sur la page publique.)
+  const showDocbar = path === "/" || path === "/table";
+  // L'avertissement "aucune donnee" ne doit bloquer que les pages qui en dependent.
+  const dataPage = path === "/" || path === "/table";
 
   // Si le document selectionne devient masque (ou disparait), on retombe sur un visible.
   useEffect(() => {
@@ -67,6 +74,14 @@ export default function Layout({
           <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
             Paramètres
           </NavLink>
+          <NavLink to="/profile" className={({ isActive }) => (isActive ? "active" : "")}>
+            Profil
+          </NavLink>
+          {canSeeExplore(email) && (
+            <NavLink to="/explore" className={({ isActive }) => (isActive ? "active" : "")}>
+              Explorer
+            </NavLink>
+          )}
         </nav>
         <div className="spacer" />
         <span className="user">
@@ -78,6 +93,7 @@ export default function Layout({
         </button>
       </header>
 
+      {showDocbar && (
       <div className="docbar">
         <label htmlFor="doc-sel">Document :</label>
         <select id="doc-sel" value={sel} onChange={(e) => setSel(e.target.value as Sel)}>
@@ -119,8 +135,9 @@ export default function Layout({
           </div>
         )}
       </div>
+      )}
 
-      {models.length === 0 ? (
+      {models.length === 0 && dataPage ? (
         <div className="empty-note">
           Aucune donnée pour ce compte. Active le suivi dans l'add-in Word, puis reviens ici.
         </div>
