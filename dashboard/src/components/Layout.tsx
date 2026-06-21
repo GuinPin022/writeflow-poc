@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { NavLink, Outlet, useOutletContext } from "react-router-dom";
+import { NavLink, Outlet, useOutletContext, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { DocModel, Sel } from "../lib/data";
 
+/** Plage de dates (AAAA-MM-JJ) du filtre Tableau ; "" = borne non définie. */
+export interface DateRange {
+  from: string;
+  to: string;
+}
 interface Ctx {
   models: DocModel[];
   sel: Sel;
+  range: DateRange;
 }
 export function usePage(): Ctx {
   return useOutletContext<Ctx>();
@@ -13,6 +19,8 @@ export function usePage(): Ctx {
 
 export default function Layout({ email, models }: { email: string; models: DocModel[] }) {
   const [sel, setSel] = useState<Sel>(models[0] ? models[0].id : "all");
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
+  const onTable = useLocation().pathname === "/table";
 
   return (
     <div className="wrap">
@@ -52,6 +60,36 @@ export default function Layout({ email, models }: { email: string; models: DocMo
             </option>
           ))}
         </select>
+
+        {onTable && (
+          <div className="daterange">
+            <label htmlFor="d-from">Du</label>
+            <input
+              id="d-from"
+              type="date"
+              value={range.from}
+              max={range.to || undefined}
+              onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
+            />
+            <label htmlFor="d-to">Au</label>
+            <input
+              id="d-to"
+              type="date"
+              value={range.to}
+              min={range.from || undefined}
+              onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
+            />
+            {(range.from || range.to) && (
+              <button
+                className="btn-clear"
+                title="Effacer la période"
+                onClick={() => setRange({ from: "", to: "" })}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {models.length === 0 ? (
@@ -59,7 +97,7 @@ export default function Layout({ email, models }: { email: string; models: DocMo
           Aucune donnée pour ce compte. Active le suivi dans l'add-in Word, puis reviens ici.
         </div>
       ) : (
-        <Outlet context={{ models, sel } satisfies Ctx} />
+        <Outlet context={{ models, sel, range } satisfies Ctx} />
       )}
     </div>
   );

@@ -39,6 +39,11 @@ nav.tabs a.active{color:var(--accent-strong);background:rgba(29,158,117,.13);}
 
 .docbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
 .docbar label{font-size:13px;color:var(--muted);font-weight:600;}
+.daterange{display:flex;align-items:center;gap:8px;}
+.docbar input[type="date"]{font-family:inherit;font-size:13px;font-weight:600;color:var(--ink);
+  background:var(--card);border:1px solid var(--line);border-radius:9px;padding:7px 10px;box-shadow:var(--shadow);}
+.daterange .btn-clear{border:1px solid var(--line);background:var(--card);color:var(--muted);
+  border-radius:9px;padding:6px 10px;cursor:pointer;font-size:13px;box-shadow:var(--shadow);}
 select{font-family:inherit;font-size:14px;font-weight:600;color:var(--ink);background:var(--card);
   border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer;box-shadow:var(--shadow);}
 select.mini{padding:3px 7px;font-size:12px;border-radius:7px;box-shadow:none;}

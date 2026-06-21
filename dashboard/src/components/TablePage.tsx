@@ -15,10 +15,14 @@ function pctClass(p: number): string {
 }
 
 export default function TablePage() {
-  const { models, sel } = usePage();
-  const cum = cumNetMap(models, sel);
+  const { models, sel, range } = usePage();
+  const cum = cumNetMap(models, sel); // cumul calcule sur TOUT l'historique (non filtre)
   const tgt = targetTotal(models, sel);
-  const keys = allDayKeys(models, sel).slice(-60); // du plus vieux au plus recent
+  // Lignes affichees : filtrees par la plage. Plage vide = 60 derniers jours (inchange).
+  let keys = allDayKeys(models, sel); // du plus vieux au plus recent
+  if (range.from) keys = keys.filter((k) => k >= range.from);
+  if (range.to) keys = keys.filter((k) => k <= range.to);
+  if (!range.from && !range.to) keys = keys.slice(-60);
   const doc = sel === "all" ? null : models.find((d) => d.id === sel)!;
 
   return (
@@ -73,6 +77,9 @@ export default function TablePage() {
             })}
           </tbody>
         </table>
+        {keys.length === 0 && (
+          <div className="empty-note">Aucun jour à afficher dans cette période.</div>
+        )}
       </div>
     </>
   );
