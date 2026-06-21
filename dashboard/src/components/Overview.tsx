@@ -1,8 +1,9 @@
 import { useState, ReactNode } from "react";
 import { usePage } from "./Layout";
-import { Tier } from "../lib/paliers";
+import { Tier, tierIndex } from "../lib/paliers";
 import {
   DocModel,
+  DayData,
   Sel,
   fmt,
   dkey,
@@ -343,27 +344,37 @@ function BadgeCalendar({ models, sel }: { models: DocModel[]; sel: Sel }) {
 }
 
 /* ---------- mini stats ---------- */
-function streakNow(models: DocModel[], sel: Sel): number {
+// Un critere decide si un jour "compte" pour une serie.
+type DayQualifier = (c: DayData) => boolean;
+const qWritten: DayQualifier = (c) => c.prod > 0; // a ecrit quelque chose
+const qPalier: DayQualifier = (c) => tierIndex(c.net, c.goal) >= 0; // >= 1er palier (25 %)
+const qGoal: DayQualifier = (c) => c.goal > 0 && c.net >= c.goal; // objectif quotidien atteint
+
+/** Serie en cours : jours consecutifs (depuis aujourd'hui) qui remplissent le critere. */
+function streakNow(models: DocModel[], sel: Sel, q: DayQualifier): number {
   let s = 0;
   const dt = new Date();
-  const t = dayAgg(models, sel, dkey(dt));
-  if (!(t.net >= t.goal && t.goal > 0)) dt.setDate(dt.getDate() - 1);
+  const today = aggDay(models, sel, dkey(dt));
+  // Aujourd'hui en cours : s'il ne compte pas encore, on ne casse pas la serie.
+  if (!(today && q(today))) dt.setDate(dt.getDate() - 1);
   for (;;) {
     const c = aggDay(models, sel, dkey(dt));
-    if (c && c.net >= c.goal && c.goal > 0) {
+    if (c && q(c)) {
       s++;
       dt.setDate(dt.getDate() - 1);
     } else break;
   }
   return s;
 }
-function recordStreak(models: DocModel[], sel: Sel, keys: string[]): number {
+
+/** Record : plus longue serie de jours calendaires consecutifs remplissant le critere. */
+function recordStreak(models: DocModel[], sel: Sel, keys: string[], q: DayQualifier): number {
   let best = 0,
     cur = 0;
   let prev: string | null = null;
   for (const k of keys) {
     const c = dayAgg(models, sel, k);
-    if (!(c.net >= c.goal && c.goal > 0)) {
+    if (!q(c)) {
       cur = 0;
       prev = k;
       continue;
@@ -456,11 +467,34 @@ export default function Overview() {
             <i className="ic" style={{ color: "var(--coral)" }}>
               🔥
             </i>{" "}
-            Série actuelle
+            Série — jour écrit
           </div>
-          <div className="num">{streakNow(models, sel)} j</div>
-          <div className="sub">record : {recordStreak(models, sel, allKeys)} j</div>
+          <div className="num">{streakNow(models, sel, qWritten)} j</div>
+          <div className="sub">record : {recordStreak(models, sel, allKeys, qWritten)} j</div>
         </div>
+        <div className="card stat">
+          <div className="lab">
+            <i className="ic" style={{ color: "var(--amber)" }}>
+              🎖️
+            </i>{" "}
+            Série — au moins un palier
+          </div>
+          <div className="num">{streakNow(models, sel, qPalier)} j</div>
+          <div className="sub">record : {recordStreak(models, sel, allKeys, qPalier)} j</div>
+        </div>
+        <div className="card stat">
+          <div className="lab">
+            <i className="ic" style={{ color: "var(--accent)" }}>
+              🎯
+            </i>{" "}
+            Série — objectif atteint
+          </div>
+          <div className="num">{streakNow(models, sel, qGoal)} j</div>
+          <div className="sub">record : {recordStreak(models, sel, allKeys, qGoal)} j</div>
+        </div>
+      </div>
+
+      <div className="grid row-2" style={{ marginBottom: 14 }}>
         <div className="card stat">
           <div className="lab">
             <i className="ic">▦</i> Moyenne journalière

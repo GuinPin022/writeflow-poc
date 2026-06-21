@@ -64,6 +64,12 @@ function ImportNewDoc({ userId, reload }: { userId: string; reload: () => Promis
         Fichier CSV — colonnes : <b>date</b>, <b>objectif quotidien</b>, <b>objectif hebdo</b>,{" "}
         <b>mots écrits</b>. Dates AAAA-MM-JJ ou JJ/MM/AAAA.
       </p>
+      <p className="import-hint">
+        À utiliser pour un document que tu <b>ne suivras pas dans Word</b> (projet terminé, archive).
+        Pour compléter le passé d'un document <b>déjà suivi</b>, ouvre-le d'abord dans Word puis
+        utilise « Importer historique » sur sa carte ci-dessous — sinon l'historique et le suivi en
+        direct resteront deux documents séparés (identifiants différents).
+      </p>
       <div className="import-row">
         <input
           type="text"
