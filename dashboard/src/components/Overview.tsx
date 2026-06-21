@@ -13,7 +13,7 @@ import {
   sumPeriod,
   goalPeriod,
   targetTotal,
-  currentLength,
+  projectLength,
   netSpeed30,
   activeDocs,
   badgeForDoc,
@@ -144,7 +144,7 @@ function PeriodCard({
 
 /* ---------- carte projet (donut) ---------- */
 function ProjectCard({ models, sel }: { models: DocModel[]; sel: Sel }) {
-  const cur = currentLength(models, sel);
+  const cur = projectLength(models, sel);
   const tgt = targetTotal(models, sel);
   const pct = tgt > 0 ? Math.min(100, Math.round((cur / tgt) * 100)) : 0;
   const speed = netSpeed30(models, sel);

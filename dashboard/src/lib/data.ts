@@ -13,6 +13,7 @@ export interface DocModel {
   theme: string;
   target: number; // cible totale du document (0 = aucune)
   deadline?: string; // echeance du document (AAAA-MM-JJ), absent = aucune
+  wordCount?: number; // compte de mots absolu courant (selon Word), absent = inconnu
   dailyGoal: number; // objectif quotidien courant (defaut si pas d'historique)
   days: Record<string, DayData>;
 }
@@ -52,7 +53,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
       .eq("user_id", userId),
     supabase
       .from("documents")
-      .select("doc_id, doc_name, daily_goal, target, deadline, theme")
+      .select("doc_id, doc_name, daily_goal, target, deadline, word_count, theme")
       .eq("user_id", userId),
     supabase
       .from("goal_history")
@@ -82,6 +83,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     d.theme = r.theme || "brume-onde";
     d.target = Number(r.target) || 0;
     d.deadline = r.deadline || undefined;
+    d.wordCount = r.word_count != null ? Number(r.word_count) : undefined;
     d.dailyGoal = Number(r.daily_goal) || 500;
   }
 
@@ -171,6 +173,19 @@ export function currentLength(models: DocModel[], sel: Sel): number {
     if (c) s += c.net;
   });
   return s;
+}
+/**
+ * Longueur de projet : compte Word absolu (`word_count`) quand il est connu pour le doc,
+ * sinon repli sur la somme des net du doc. Par document, pour gerer le mode "Tous"
+ * ou certains docs ont la valeur et d'autres non.
+ */
+export function projectLength(models: DocModel[], sel: Sel): number {
+  return activeDocs(models, sel).reduce((s, d) => {
+    if (typeof d.wordCount === "number") return s + d.wordCount;
+    let net = 0;
+    for (const c of Object.values(d.days)) net += c.net;
+    return s + net;
+  }, 0);
 }
 export function cumNetMap(models: DocModel[], sel: Sel): Record<string, number> {
   const out: Record<string, number> = {};

@@ -76,6 +76,25 @@ export async function syncToday(
     .upsert(row, { onConflict: "user_id,doc_id,day" });
 
   if (error) throw error;
+
+  // Longueur absolue courante du document (selon Word) -> documents.word_count.
+  // Corrige la longueur de projet cote dashboard, qui sinon vaut la somme des net
+  // depuis le debut du suivi (donc 0 au depart, meme si le doc avait deja du texte).
+  // Upsert partiel : ne touche que word_count/doc_name, laisse objectifs/theme/deadline.
+  const wordCount = data?.lastCount;
+  if (typeof wordCount === "number") {
+    const { error: wErr } = await supabase.from("documents").upsert(
+      {
+        user_id: userId,
+        doc_id: doc.id,
+        doc_name: doc.name,
+        word_count: wordCount,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,doc_id" }
+    );
+    if (wErr) throw wErr;
+  }
 }
 
 /**
