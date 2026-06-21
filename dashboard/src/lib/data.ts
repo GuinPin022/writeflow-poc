@@ -244,6 +244,33 @@ export async function setDefaultDoc(
   if (e2) throw e2;
 }
 
+/**
+ * Supprime DEFINITIVEMENT un document : efface ses lignes dans daily_stats,
+ * goal_history et documents. Necessite les policies DELETE (documents + daily_stats ;
+ * goal_history est en ALL). Attention : si le fichier Word est rouvert avec le suivi
+ * actif, le plugin le re-enregistre et les lignes reviennent.
+ */
+export async function deleteDoc(userId: string, docId: string): Promise<void> {
+  const { error: e1 } = await supabase
+    .from("daily_stats")
+    .delete()
+    .eq("user_id", userId)
+    .eq("doc_id", docId);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase
+    .from("goal_history")
+    .delete()
+    .eq("user_id", userId)
+    .eq("doc_id", docId);
+  if (e2) throw e2;
+  const { error: e3 } = await supabase
+    .from("documents")
+    .delete()
+    .eq("user_id", userId)
+    .eq("doc_id", docId);
+  if (e3) throw e3;
+}
+
 /* ===================== Agregation (doc courant ou "Tous") ===================== */
 /** Docs pris en compte : "Tous" exclut les masques ; un id precis renvoie ce doc. */
 export function activeDocs(models: DocModel[], sel: Sel): DocModel[] {

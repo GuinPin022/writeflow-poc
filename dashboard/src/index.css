@@ -36,6 +36,8 @@ nav.tabs a.active{color:var(--accent-strong);background:rgba(29,158,117,.13);}
 .btn{font-family:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer;}
 .btn:hover{filter:brightness(.98);}
 .btn.primary{border-color:var(--accent);background:var(--accent);color:#fff;}
+.btn.danger{border-color:#e2554f;color:#e2554f;background:var(--card);}
+.btn.danger:hover{background:#e2554f;color:#fff;}
 
 .docbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
 .docbar label{font-size:13px;color:var(--muted);font-weight:600;}

@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { usePage } from "./Layout";
-import { DocModel, DocSettingsPatch, saveDocSettings, setDocHidden, setDefaultDoc } from "../lib/data";
+import {
+  DocModel,
+  DocSettingsPatch,
+  saveDocSettings,
+  setDocHidden,
+  setDefaultDoc,
+  deleteDoc,
+} from "../lib/data";
 import { THEMES, THEME_LABELS } from "../lib/paliers";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -31,6 +38,23 @@ function DocCard({
 
   const commit = (patch: DocSettingsPatch) => run(() => saveDocSettings(userId, doc, patch));
   const num = (v: string) => Math.max(0, parseInt(v, 10) || 0);
+
+  // Suppression definitive : pas de setState apres reload (la carte est demontee).
+  const onDelete = async () => {
+    const ok = window.confirm(
+      `Supprimer définitivement « ${doc.name} » et tout son historique ?\n\n` +
+        `Action irréversible. Note : si tu rouvres ce document dans Word avec le suivi actif, ` +
+        `il sera recréé automatiquement.`
+    );
+    if (!ok) return;
+    setState("saving");
+    try {
+      await deleteDoc(userId, doc.id);
+      await reload();
+    } catch {
+      setState("error");
+    }
+  };
 
   return (
     <div className={"card doc-settings" + (doc.hidden ? " is-hidden" : "")}>
@@ -118,6 +142,9 @@ function DocCard({
         </button>
         <button className="btn" onClick={() => run(() => setDocHidden(userId, doc, !doc.hidden))}>
           {doc.hidden ? "Réafficher" : "Masquer"}
+        </button>
+        <button className="btn danger" onClick={onDelete}>
+          Supprimer
         </button>
       </div>
     </div>

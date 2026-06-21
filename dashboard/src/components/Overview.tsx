@@ -52,7 +52,7 @@ function PeriodBadges({
   if (sel === "all") {
     return (
       <div className="bd-row">
-        {models.map((d) => {
+        {activeDocs(models, sel).map((d) => {
           const b = bestBadgeOfDoc(d, keys);
           return b ? <Chip key={d.id} b={b} title={d.name} /> : <Blank key={d.id} />;
         })}
