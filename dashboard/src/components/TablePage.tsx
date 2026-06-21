@@ -5,6 +5,7 @@ import {
   aggDay,
   allDayKeys,
   cumNetMap,
+  projectBaseline,
   targetTotal,
   badgeForDoc,
   bestBadgeAggDay,
@@ -17,6 +18,7 @@ function pctClass(p: number): string {
 export default function TablePage() {
   const { models, sel, range } = usePage();
   const cum = cumNetMap(models, sel); // cumul calcule sur TOUT l'historique (non filtre)
+  const base = projectBaseline(models, sel); // contenu present avant le suivi (longueur absolue)
   const tgt = targetTotal(models, sel);
   // Lignes affichees : filtrees par la plage. Plage vide = 60 derniers jours (inchange).
   let keys = allDayKeys(models, sel); // du plus vieux au plus recent
@@ -45,7 +47,7 @@ export default function TablePage() {
             {keys.map((k) => {
               const c = aggDay(models, sel, k);
               if (!c) return null;
-              const glob = tgt > 0 ? Math.round((cum[k] / tgt) * 100) : 0;
+              const glob = tgt > 0 ? Math.round(((base + cum[k]) / tgt) * 100) : 0;
               const dayp = c.goal > 0 ? Math.round((c.net / c.goal) * 100) : 0;
               const b = doc ? badgeForDoc(doc, k) : bestBadgeAggDay(models, sel, k);
               return (

@@ -457,14 +457,18 @@ export function goalPeriod(models: DocModel[], sel: Sel, keys: string[]): number
 export function targetTotal(models: DocModel[], sel: Sel): number {
   return activeDocs(models, sel).reduce((s, d) => s + d.target, 0);
 }
-/** Longueur "tracee" = somme des net (baseline = debut du suivi). */
-export function currentLength(models: DocModel[], sel: Sel): number {
-  let s = 0;
-  allDayKeys(models, sel).forEach((k) => {
-    const c = aggDay(models, sel, k);
-    if (c) s += c.net;
-  });
-  return s;
+/**
+ * Base de depart d'un projet = contenu present AVANT le debut du suivi.
+ * Par doc : word_count − Σnet si word_count connu, sinon 0 (pas de base estimable).
+ * Permet d'exprimer l'avancement en longueur ABSOLUE, coherent avec projectLength/donut.
+ */
+export function projectBaseline(models: DocModel[], sel: Sel): number {
+  return activeDocs(models, sel).reduce((s, d) => {
+    if (typeof d.wordCount !== "number") return s;
+    let net = 0;
+    for (const c of Object.values(d.days)) net += c.net;
+    return s + (d.wordCount - net);
+  }, 0);
 }
 /**
  * Longueur de projet : compte Word absolu (`word_count`) quand il est connu pour le doc,

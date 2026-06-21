@@ -405,6 +405,8 @@ export default function Overview() {
     activeDocs(models, sel).forEach((d) => Object.keys(d.days).forEach((k) => set.add(k)));
     allKeys.push(...[...set].sort());
   }
+  // Moyenne + meilleur jour basés sur le NET (Word). Moyenne = net moyen sur les jours
+  // écrits (productif > 0) ; meilleur jour = plus gros net.
   let avgSum = 0,
     avgCnt = 0,
     bestVal = 0,
@@ -412,11 +414,11 @@ export default function Overview() {
   allKeys.forEach((k) => {
     const c = aggDay(models, sel, k);
     if (c && c.prod > 0) {
-      avgSum += c.prod;
+      avgSum += c.net;
       avgCnt++;
     }
-    if (c && c.prod > bestVal) {
-      bestVal = c.prod;
+    if (c && c.net > bestVal) {
+      bestVal = c.net;
       bestKey = k;
     }
   });
@@ -500,7 +502,7 @@ export default function Overview() {
             <i className="ic">▦</i> Moyenne journalière
           </div>
           <div className="num">{fmt(avgCnt ? avgSum / avgCnt : 0)}</div>
-          <div className="sub">productif · sur les jours écrits ({avgCnt})</div>
+          <div className="sub">net (Word) · sur les jours écrits ({avgCnt})</div>
         </div>
         <div className="card stat">
           <div className="lab">
@@ -511,7 +513,7 @@ export default function Overview() {
           </div>
           <div className="num">{fmt(bestVal)}</div>
           <div className="sub">
-            productif · {bestKey ? parseKey(bestKey).toLocaleDateString("fr-FR") : "—"}
+            net (Word) · {bestKey ? parseKey(bestKey).toLocaleDateString("fr-FR") : "—"}
           </div>
         </div>
       </div>
