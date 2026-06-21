@@ -16,6 +16,8 @@ export interface DocModel {
   wordCount?: number; // compte de mots absolu courant (selon Word), absent = inconnu
   dailyGoal: number; // objectif quotidien courant (defaut si pas d'historique)
   weeklyGoal: number; // objectif hebdo courant
+  hidden: boolean; // masque : exclu du selecteur et de l'agregat "Tous"
+  isDefault: boolean; // document charge par defaut au demarrage du dashboard
   days: Record<string, DayData>;
 }
 /** "all" = tous les documents agreges ; sinon un doc.id. */
@@ -54,7 +56,9 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
       .eq("user_id", userId),
     supabase
       .from("documents")
-      .select("doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme")
+      .select(
+        "doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme, hidden, is_default"
+      )
       .eq("user_id", userId),
     supabase
       .from("goal_history")
@@ -71,7 +75,17 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
   const ensure = (id: string, name?: string): DocModel => {
     let d = docs.get(id);
     if (!d) {
-      d = { id, name: name || id, theme: "brume-onde", target: 0, dailyGoal: 500, weeklyGoal: 2500, days: {} };
+      d = {
+        id,
+        name: name || id,
+        theme: "brume-onde",
+        target: 0,
+        dailyGoal: 500,
+        weeklyGoal: 2500,
+        hidden: false,
+        isDefault: false,
+        days: {},
+      };
       docs.set(id, d);
     }
     if (name) d.name = name;
@@ -87,6 +101,8 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     d.wordCount = r.word_count != null ? Number(r.word_count) : undefined;
     d.dailyGoal = Number(r.daily_goal) || 500;
     d.weeklyGoal = Number(r.weekly_goal) || 2500;
+    d.hidden = !!r.hidden;
+    d.isDefault = !!r.is_default;
   }
 
   // Historique des objectifs, par document (croissant par date).
@@ -189,9 +205,49 @@ export async function saveDocSettings(
   }
 }
 
+/** Masque/affiche un document (upsert partiel, ne touche pas les autres reglages). */
+export async function setDocHidden(userId: string, doc: DocModel, hidden: boolean): Promise<void> {
+  const { error } = await supabase.from("documents").upsert(
+    { user_id: userId, doc_id: doc.id, doc_name: doc.name, hidden, updated_at: new Date().toISOString() },
+    { onConflict: "user_id,doc_id" }
+  );
+  if (error) throw error;
+}
+
+/**
+ * Definit (ou retire) le document par defaut. Un seul a la fois : on remet d'abord
+ * tous les documents de l'utilisateur a false, puis on marque celui choisi.
+ */
+export async function setDefaultDoc(
+  userId: string,
+  doc: DocModel,
+  makeDefault: boolean
+): Promise<void> {
+  if (!makeDefault) {
+    const { error } = await supabase
+      .from("documents")
+      .update({ is_default: false })
+      .eq("user_id", userId)
+      .eq("doc_id", doc.id);
+    if (error) throw error;
+    return;
+  }
+  const { error: e1 } = await supabase
+    .from("documents")
+    .update({ is_default: false })
+    .eq("user_id", userId);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from("documents").upsert(
+    { user_id: userId, doc_id: doc.id, doc_name: doc.name, is_default: true, updated_at: new Date().toISOString() },
+    { onConflict: "user_id,doc_id" }
+  );
+  if (e2) throw e2;
+}
+
 /* ===================== Agregation (doc courant ou "Tous") ===================== */
+/** Docs pris en compte : "Tous" exclut les masques ; un id precis renvoie ce doc. */
 export function activeDocs(models: DocModel[], sel: Sel): DocModel[] {
-  return sel === "all" ? models : models.filter((d) => d.id === sel);
+  return sel === "all" ? models.filter((d) => !d.hidden) : models.filter((d) => d.id === sel);
 }
 export function allDayKeys(models: DocModel[], sel: Sel): string[] {
   const set = new Set<string>();

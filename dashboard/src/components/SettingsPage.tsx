@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { usePage } from "./Layout";
-import { DocModel, DocSettingsPatch, saveDocSettings } from "../lib/data";
+import { DocModel, DocSettingsPatch, saveDocSettings, setDocHidden, setDefaultDoc } from "../lib/data";
 import { THEMES, THEME_LABELS } from "../lib/paliers";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -16,10 +16,11 @@ function DocCard({
 }) {
   const [state, setState] = useState<SaveState>("idle");
 
-  const commit = async (patch: DocSettingsPatch) => {
+  // Enrobe une ecriture : etat saving -> reload -> saved (ou error).
+  const run = async (fn: () => Promise<void>) => {
     setState("saving");
     try {
-      await saveDocSettings(userId, doc, patch);
+      await fn();
       await reload();
       setState("saved");
       window.setTimeout(() => setState("idle"), 1500);
@@ -28,12 +29,17 @@ function DocCard({
     }
   };
 
+  const commit = (patch: DocSettingsPatch) => run(() => saveDocSettings(userId, doc, patch));
   const num = (v: string) => Math.max(0, parseInt(v, 10) || 0);
 
   return (
-    <div className="card doc-settings">
+    <div className={"card doc-settings" + (doc.hidden ? " is-hidden" : "")}>
       <div className="doc-settings-head">
-        <h2>{doc.name}</h2>
+        <h2>
+          {doc.name}
+          {doc.isDefault && <span className="tag-default">par défaut</span>}
+          {doc.hidden && <span className="tag-hidden">masqué</span>}
+        </h2>
         <span className={"save-state " + state}>
           {state === "saving"
             ? "Enregistrement…"
@@ -103,6 +109,17 @@ function DocCard({
           </select>
         </label>
       </div>
+      <div className="doc-actions">
+        <button
+          className={"btn" + (doc.isDefault ? " primary" : "")}
+          onClick={() => run(() => setDefaultDoc(userId, doc, !doc.isDefault))}
+        >
+          {doc.isDefault ? "★ Document par défaut" : "☆ Définir par défaut"}
+        </button>
+        <button className="btn" onClick={() => run(() => setDocHidden(userId, doc, !doc.hidden))}>
+          {doc.hidden ? "Réafficher" : "Masquer"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -117,8 +134,9 @@ export default function SettingsPage() {
         <DocCard key={d.id} doc={d} userId={userId} reload={reload} />
       ))}
       <p style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>
-        Document par défaut, masquage, suppression et import historique arriveront dans les
-        prochaines étapes.
+        Un document « par défaut » est celui chargé au démarrage du dashboard. Un document « masqué »
+        n'apparaît plus dans le sélecteur ni dans « Tous les documents », mais reste listé ici pour
+        être réaffiché. Suppression et import historique arriveront ensuite.
       </p>
     </>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useOutletContext, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { DocModel, Sel } from "../lib/data";
@@ -30,9 +30,22 @@ export default function Layout({
   userId: string;
   reload: () => Promise<void>;
 }) {
-  const [sel, setSel] = useState<Sel>(models[0] ? models[0].id : "all");
+  const visible = models.filter((d) => !d.hidden);
+  // Selection initiale : le document par defaut s'il existe (et visible), sinon le 1er visible.
+  const [sel, setSel] = useState<Sel>(() => {
+    const def = visible.find((d) => d.isDefault);
+    if (def) return def.id;
+    return visible[0] ? visible[0].id : "all";
+  });
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const onTable = useLocation().pathname === "/table";
+
+  // Si le document selectionne devient masque (ou disparait), on retombe sur un visible.
+  useEffect(() => {
+    if (sel !== "all" && !visible.some((d) => d.id === sel)) {
+      setSel(visible[0] ? visible[0].id : "all");
+    }
+  }, [models, sel, visible]);
 
   return (
     <div className="wrap">
@@ -69,7 +82,7 @@ export default function Layout({
         <label htmlFor="doc-sel">Document :</label>
         <select id="doc-sel" value={sel} onChange={(e) => setSel(e.target.value as Sel)}>
           <option value="all">Tous les documents</option>
-          {models.map((d) => (
+          {visible.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
             </option>
