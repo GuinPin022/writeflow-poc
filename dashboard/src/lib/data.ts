@@ -31,10 +31,21 @@ interface GoalChange {
 }
 
 /* ===================== Dates ===================== */
+// Heure de bascule de journee (0 = minuit, defaut), reglee depuis user_settings.
+// DOIT correspondre a celle de l'add-in (dailyStore.dateKey) pour que "aujourd'hui /
+// cette semaine" s'alignent sur la facon dont les jours ont ete decoupes a l'ecriture.
+let rolloverHour = 0;
+export function setRolloverHour(h: number): void {
+  rolloverHour = Number.isFinite(h) ? Math.min(23, Math.max(0, Math.trunc(h))) : 0;
+}
+export function getRolloverHour(): number {
+  return rolloverHour;
+}
 export function dkey(d: Date = new Date()): string {
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const da = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${da}`;
+  const eff = rolloverHour ? new Date(d.getTime() - rolloverHour * 3_600_000) : d;
+  const m = String(eff.getMonth() + 1).padStart(2, "0");
+  const da = String(eff.getDate()).padStart(2, "0");
+  return `${eff.getFullYear()}-${m}-${da}`;
 }
 export function parseKey(k: string): Date {
   return new Date(k + "T12:00:00");

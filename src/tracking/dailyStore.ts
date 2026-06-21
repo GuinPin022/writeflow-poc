@@ -70,11 +70,27 @@ interface State {
   docs: Record<string, DocData>;
 }
 
-/** Cle de date LOCALE (pas UTC) au format AAAA-MM-JJ. */
+// Heure de bascule de journee (0 = minuit, defaut). Reglee depuis le compte
+// (table user_settings, via le dashboard web). Un mot ecrit AVANT cette heure
+// compte sur la veille. Non retroactif : seuls les jours a venir sont decoupes ainsi.
+let rolloverHour = 0;
+
+/** Definit l'heure de bascule (0-23). Hors plage -> 0 (minuit). */
+export function setRolloverHour(h: number): void {
+  rolloverHour = Number.isFinite(h) ? Math.min(23, Math.max(0, Math.trunc(h))) : 0;
+}
+
+/** Heure de bascule courante (0-23). */
+export function getRolloverHour(): number {
+  return rolloverHour;
+}
+
+/** Cle de date LOCALE (pas UTC) au format AAAA-MM-JJ, decalee de l'heure de bascule. */
 export function dateKey(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const eff = rolloverHour ? new Date(d.getTime() - rolloverHour * 3_600_000) : d;
+  const y = eff.getFullYear();
+  const m = String(eff.getMonth() + 1).padStart(2, "0");
+  const day = String(eff.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 

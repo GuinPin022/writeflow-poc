@@ -6,6 +6,7 @@ import { renderDocumentView, renderGlobalView, renderSettingsView } from "./dash
 import {
   getSession,
   loadAccountData,
+  loadUserSettings,
   signIn,
   signOut,
   signUp,
@@ -160,6 +161,8 @@ function renderSettings(): void {
 async function syncDown(): Promise<void> {
   if (!tracker || !supaSession) return;
   try {
+    // Reglages globaux (heure de bascule) AVANT de decouper/afficher les jours.
+    await loadUserSettings(supaSession.user.id);
     await loadAccountData(tracker.getDailyStore(), tracker.getCurrentDoc(), supaSession.user.id);
     // Rattrapage montant : pousse TOUS les jours locaux (jours hors-ligne passes inclus),
     // pas seulement aujourd'hui. Idempotent, donc sans risque.

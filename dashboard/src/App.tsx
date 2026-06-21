@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
-import { loadModels, DocModel } from "./lib/data";
+import { loadModels, DocModel, setRolloverHour } from "./lib/data";
+import { loadRolloverHour } from "./lib/settings";
 import Login from "./components/Login";
 import Layout from "./components/Layout";
 import Overview from "./components/Overview";
@@ -28,6 +29,7 @@ function PrivateApp() {
   const [authReady, setAuthReady] = useState(false);
   const [models, setModels] = useState<DocModel[] | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [prefsReady, setPrefsReady] = useState(false);
 
   // Session Supabase (restauree depuis localStorage, puis ecoute des changements).
   useEffect(() => {
@@ -60,8 +62,22 @@ function PrivateApp() {
     void reload();
   }, [session, reload]);
 
+  // Reglages globaux (heure de bascule) : applique AVANT le premier rendu pour que
+  // "aujourd'hui / cette semaine" soient calcules sur la bonne frontiere de journee.
+  useEffect(() => {
+    if (!session) {
+      setPrefsReady(false);
+      return;
+    }
+    loadRolloverHour(session.user.id)
+      .then((h) => setRolloverHour(h))
+      .catch(() => setRolloverHour(0))
+      .finally(() => setPrefsReady(true));
+  }, [session]);
+
   if (!authReady) return <div className="center-note">Chargement…</div>;
   if (!session) return <Login />;
+  if (!prefsReady) return <div className="center-note">Chargement…</div>;
   if (loadErr)
     return <div className="center-note">Erreur de chargement : {loadErr}</div>;
   if (!models) return <div className="center-note">Chargement de tes données…</div>;

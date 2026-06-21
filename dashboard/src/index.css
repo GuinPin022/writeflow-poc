@@ -52,6 +52,10 @@ select.mini{padding:3px 7px;font-size:12px;border-radius:7px;box-shadow:none;}
 
 .doc-settings{margin-bottom:14px;}
 .doc-settings-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.doc-head-toggle{cursor:pointer;user-select:none;}
+.doc-head-toggle.collapsed{margin-bottom:0;}
+.doc-head-toggle:hover h2{color:var(--accent-strong);}
+.doc-arrow{display:inline-block;color:var(--muted);font-size:11px;margin-right:6px;}
 .doc-settings-head h2{margin:0;}
 .save-state{font-size:13px;font-weight:600;color:var(--muted);}
 .save-state.saved{color:#1f9d55;}

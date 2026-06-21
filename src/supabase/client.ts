@@ -8,7 +8,7 @@
 
 import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config";
-import { DailyStore, dateKey } from "../tracking/dailyStore";
+import { DailyStore, dateKey, setRolloverHour } from "../tracking/dailyStore";
 
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -191,6 +191,20 @@ export async function syncDocTarget(
     );
     if (hErr) throw hErr;
   }
+}
+
+/**
+ * Charge les reglages GLOBAUX du compte (heure de bascule de journee) et les
+ * applique localement via setRolloverHour. A appeler au demarrage / a la
+ * reconnexion. Absent en ligne -> minuit (0), comportement par defaut.
+ */
+export async function loadUserSettings(userId: string): Promise<void> {
+  const { data } = await supabase
+    .from("user_settings")
+    .select("day_rollover_hour")
+    .eq("user_id", userId)
+    .maybeSingle();
+  setRolloverHour(data?.day_rollover_hour ?? 0);
 }
 
 /**

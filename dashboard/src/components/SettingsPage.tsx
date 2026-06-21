@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { usePage } from "./Layout";
 import { loadMyProfile } from "../lib/profile";
+import { saveRolloverHour } from "../lib/settings";
 import {
   DocModel,
   DocSettingsPatch,
@@ -13,10 +14,75 @@ import {
   deleteDoc,
   parseHistoryCsv,
   importHistory,
+  getRolloverHour,
+  setRolloverHour,
 } from "../lib/data";
 import { THEMES, THEME_LABELS } from "../lib/paliers";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+/* ---------- Préférences générales (compte) ---------- */
+function GeneralPrefs({ userId, reload }: { userId: string; reload: () => Promise<void> }) {
+  const [hour, setHour] = useState(getRolloverHour());
+  const [state, setState] = useState<SaveState>("idle");
+
+  const change = async (h: number) => {
+    setHour(h);
+    setRolloverHour(h); // applique tout de suite (recalcule "aujourd'hui/semaine")
+    setState("saving");
+    try {
+      await saveRolloverHour(userId, h);
+      await reload();
+      setState("saved");
+      window.setTimeout(() => setState("idle"), 1500);
+    } catch {
+      setState("error");
+    }
+  };
+
+  return (
+    <div className="card import-card">
+      <div className="doc-settings-head">
+        <h2>Préférences générales</h2>
+        <span className={"save-state " + state}>
+          {state === "saving"
+            ? "Enregistrement…"
+            : state === "saved"
+              ? "Enregistré ✓"
+              : state === "error"
+                ? "Erreur — réessaie"
+                : ""}
+        </span>
+      </div>
+      <label
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 5,
+          fontSize: 13,
+          color: "var(--muted)",
+          fontWeight: 600,
+          maxWidth: 320,
+        }}
+      >
+        Heure de bascule de journée
+        <select value={hour} onChange={(e) => change(parseInt(e.target.value, 10))}>
+          {Array.from({ length: 24 }, (_, h) => (
+            <option key={h} value={h}>
+              {h === 0 ? "Minuit (00 h) — par défaut" : `${String(h).padStart(2, "0")} h`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="import-hint" style={{ marginTop: 8 }}>
+        Heure à laquelle un nouveau jour d'écriture commence. Ex. « 04 h » : ce que tu écris après
+        minuit et avant 4 h compte sur la veille. <b>Non rétroactif</b> — seuls les jours à venir
+        suivent ce réglage, l'historique déjà enregistré ne bouge pas. S'applique aussi dans l'add-in
+        Word (après rechargement).
+      </p>
+    </div>
+  );
+}
 
 /* ---------- Import d'historique : nouveau document ---------- */
 function ImportNewDoc({ userId, reload }: { userId: string; reload: () => Promise<void> }) {
@@ -105,6 +171,7 @@ function DocCard({
   profilePublic: boolean;
 }) {
   const [state, setState] = useState<SaveState>("idle");
+  const [open, setOpen] = useState(false); // carte repliee par defaut
 
   // Enrobe une ecriture : etat saving -> reload -> saved (ou error).
   const run = async (fn: () => Promise<void>) => {
@@ -171,8 +238,13 @@ function DocCard({
 
   return (
     <div className={"card doc-settings" + (doc.hidden ? " is-hidden" : "")}>
-      <div className="doc-settings-head">
+      <div
+        className={"doc-settings-head doc-head-toggle" + (open ? "" : " collapsed")}
+        onClick={() => setOpen((o) => !o)}
+        title={open ? "Replier" : "Déplier les réglages"}
+      >
         <h2>
+          <span className="doc-arrow">{open ? "▾" : "▸"}</span>
           {doc.name}
           {doc.isDefault && <span className="tag-default">par défaut</span>}
           {doc.hidden && <span className="tag-hidden">masqué</span>}
@@ -189,6 +261,8 @@ function DocCard({
                 : ""}
         </span>
       </div>
+      {open && (
+        <>
       <div className="settings-grid">
         <label>
           Objectif quotidien
@@ -286,6 +360,8 @@ function DocCard({
         </button>
       </div>
       {importMsg && <p className="import-msg">{importMsg}</p>}
+        </>
+      )}
     </div>
   );
 }
@@ -302,7 +378,12 @@ export default function SettingsPage() {
 
   return (
     <>
-      <h1 className="page">Paramètres des documents</h1>
+      <h1 className="page">Paramètres généraux</h1>
+      <GeneralPrefs userId={userId} reload={reload} />
+
+      <h1 className="page" style={{ marginTop: 24 }}>
+        Paramètres des documents
+      </h1>
       <ImportNewDoc userId={userId} reload={reload} />
       {models.length === 0 && <div className="empty-note">Aucun document.</div>}
       {models.map((d) => (
