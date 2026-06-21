@@ -5,6 +5,33 @@ import { THEMES, palierTrackerHtml } from "../tracking/paliers";
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
+/** Nombre de jours (calendaires) d'aujourd'hui jusqu'a la date ISO `AAAA-MM-JJ`. */
+function daysUntil(iso: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(iso + "T00:00:00");
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+/** Ligne « 📅 Échéance : <date> · <jours restants> » pour la vue Document. "" si pas de deadline. */
+function deadlineLineHtml(deadline?: string): string {
+  if (!deadline) return "";
+  const left = daysUntil(deadline);
+  const dStr = new Date(deadline + "T00:00:00").toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const when =
+    left > 0
+      ? `${left} jour${left > 1 ? "s" : ""} restant${left > 1 ? "s" : ""}`
+      : left === 0
+        ? "c'est aujourd'hui"
+        : `dépassée de ${-left} jour${-left > 1 ? "s" : ""}`;
+  const cls = left < 0 ? "doc-deadline late" : "doc-deadline";
+  return `<div class="${cls}">📅 Échéance : ${dStr} · ${when}</div>`;
+}
+
 export interface DashboardOpts {
   running: boolean;
   onToggle: () => void;
@@ -73,6 +100,7 @@ export function renderDocumentView(
          <div class="doc-name" title="${docName}">📄 ${docName}</div>
          <div class="doc-goal-top"><span>Mots du document (Word)</span><span>${docWord} / ${docTarget > 0 ? docTarget : "—"} · ${docPct}%</span></div>
          <div class="wbar"><div class="wbar-fill" style="width:${(clamp01(docFrac) * 100).toFixed(0)}%"></div></div>
+         ${deadlineLineHtml(g.deadline)}
        </div>`
     : `<div class="doc-block doc-muted">Active le suivi pour identifier le document ouvert.</div>`;
 
@@ -187,6 +215,9 @@ export function renderSettingsView(
       <div class="goals" style="margin-top:8px">
         <label>Total du document (mots)<input id="set-doctarget" type="number" min="0" step="1000" value="${g.target}" ${dis}></label>
       </div>
+      <div class="goals" style="margin-top:8px">
+        <label>Échéance (deadline)<input id="set-deadline" type="date" value="${g.deadline ?? ""}" ${dis}></label>
+      </div>
       ${docId ? "" : `<p class="hint">Active le suivi pour identifier le document et définir ses objectifs.</p>`}
 
       <div class="dash-section-label">Apparence — ${docName}</div>
@@ -222,9 +253,11 @@ export function renderSettingsView(
     store.setDocGoals(docId, patch);
     onChange?.("docTarget");
   };
+  const dl = container.querySelector<HTMLInputElement>("#set-deadline");
   d?.addEventListener("change", () => commit({ daily: Math.max(0, parseInt(d.value, 10) || 0) }));
   w?.addEventListener("change", () => commit({ weekly: Math.max(0, parseInt(w.value, 10) || 0) }));
   t?.addEventListener("change", () => commit({ target: Math.max(0, parseInt(t.value, 10) || 0) }));
+  dl?.addEventListener("change", () => commit({ deadline: dl.value }));
   const theme = container.querySelector<HTMLSelectElement>("#set-theme");
   theme?.addEventListener("change", () => {
     if (!docId) return;

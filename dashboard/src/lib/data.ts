@@ -12,6 +12,7 @@ export interface DocModel {
   name: string;
   theme: string;
   target: number; // cible totale du document (0 = aucune)
+  deadline?: string; // echeance du document (AAAA-MM-JJ), absent = aucune
   dailyGoal: number; // objectif quotidien courant (defaut si pas d'historique)
   days: Record<string, DayData>;
 }
@@ -51,7 +52,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
       .eq("user_id", userId),
     supabase
       .from("documents")
-      .select("doc_id, doc_name, daily_goal, target, theme")
+      .select("doc_id, doc_name, daily_goal, target, deadline, theme")
       .eq("user_id", userId),
     supabase
       .from("goal_history")
@@ -80,6 +81,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     const d = ensure(r.doc_id, r.doc_name);
     d.theme = r.theme || "brume-onde";
     d.target = Number(r.target) || 0;
+    d.deadline = r.deadline || undefined;
     d.dailyGoal = Number(r.daily_goal) || 500;
   }
 

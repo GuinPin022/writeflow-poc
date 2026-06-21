@@ -147,6 +147,7 @@ export async function syncDocTarget(
       daily_goal: g.daily,
       weekly_goal: g.weekly,
       target: g.target,
+      deadline: g.deadline ?? null,
       theme: daily.getDocTheme(doc.id),
       updated_at: new Date().toISOString(),
     },
@@ -186,12 +187,16 @@ export async function loadAccountData(
   if (doc.id) {
     const { data: d } = await supabase
       .from("documents")
-      .select("daily_goal, weekly_goal, target, theme")
+      .select("daily_goal, weekly_goal, target, deadline, theme")
       .eq("user_id", userId)
       .eq("doc_id", doc.id)
       .maybeSingle();
     if (d) {
-      daily.setDocGoals(doc.id, { daily: d.daily_goal, weekly: d.weekly_goal, target: d.target }, false);
+      daily.setDocGoals(
+        doc.id,
+        { daily: d.daily_goal, weekly: d.weekly_goal, target: d.target, deadline: d.deadline ?? "" },
+        false
+      );
       if (d.theme) daily.setDocTheme(doc.id, d.theme);
     }
 

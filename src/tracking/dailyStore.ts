@@ -34,6 +34,7 @@ export interface DocGoals {
   daily: number; // objectif quotidien (mots productifs)
   weekly: number; // objectif hebdo (mots productifs)
   target: number; // objectif total du document (0 = aucun)
+  deadline?: string; // echeance du document (AAAA-MM-JJ), vide/absent = aucune
 }
 
 /** Un changement d'objectifs daté (historique append-only). */
@@ -57,6 +58,7 @@ export interface DocData {
   daily: Record<string, number>;
   detail: Record<string, DayDetail>;
   target?: number; // objectif de mots pour le document complet (0 = aucun)
+  deadline?: string; // echeance du document (AAAA-MM-JJ), absent = aucune
   dailyGoal?: number; // objectif quotidien du document (mots productifs)
   weeklyGoal?: number; // objectif hebdo du document (mots productifs)
   goalHistory?: GoalChange[]; // historique date des objectifs (croissant par `at`)
@@ -427,6 +429,7 @@ export class DailyStore {
       daily: d?.dailyGoal ?? DEFAULT_DOC_GOALS.daily,
       weekly: d?.weeklyGoal ?? DEFAULT_DOC_GOALS.weekly,
       target: d?.target ?? 0,
+      deadline: d?.deadline,
     };
   }
 
@@ -467,6 +470,8 @@ export class DailyStore {
     if (typeof g.daily === "number") d.dailyGoal = Math.max(0, g.daily);
     if (typeof g.weekly === "number") d.weeklyGoal = Math.max(0, g.weekly);
     if (typeof g.target === "number") d.target = Math.max(0, g.target);
+    // L'echeance est un simple etat courant (pas historise) : "" l'efface.
+    if (typeof g.deadline === "string") d.deadline = g.deadline || undefined;
     if (!record) {
       this.save(st);
       return;
@@ -555,6 +560,7 @@ export class DailyStore {
       daily: data.daily || {},
       detail: data.detail || {},
       target: data.target,
+      deadline: data.deadline,
       dailyGoal: data.dailyGoal,
       weeklyGoal: data.weeklyGoal,
       goalHistory: data.goalHistory,

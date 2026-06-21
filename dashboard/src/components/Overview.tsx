@@ -156,6 +156,32 @@ function ProjectCard({ models, sel }: { models: DocModel[]; sel: Sel }) {
       : speed > 0 && tgt > 0
         ? `ETA : ~${Math.ceil((tgt - cur) / speed)} j (≈ ${fmt(speed)} net/j)`
         : "rythme insuffisant pour estimer";
+
+  // Échéance "intelligente" : visible seulement pour UN document (pas en mode "Tous").
+  const doc = sel === "all" ? null : models.find((d) => d.id === sel);
+  const deadlineLine = (() => {
+    if (!doc?.deadline || tgt <= 0) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dd = new Date(doc.deadline + "T00:00:00");
+    const daysLeft = Math.ceil((dd.getTime() - today.getTime()) / 86_400_000);
+    const dStr = dd.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    const remaining = Math.max(0, tgt - cur);
+    if (cur >= tgt) {
+      return { txt: `📅 ${dStr} — objectif déjà atteint ✓`, color: "var(--accent)" };
+    }
+    if (daysLeft <= 0) {
+      return { txt: `📅 Échéance dépassée (${dStr}) · ${fmt(remaining)} mots restants`, color: "#e2554f" };
+    }
+    const need = remaining / daysLeft; // mots/jour requis pour tenir
+    const onTrack = speed >= need;
+    return {
+      txt: `📅 ${dStr} · ${daysLeft} j · requis ${fmt(need)}/j ${
+        onTrack ? "✅ dans les temps" : "⚠️ en retard"
+      }`,
+      color: onTrack ? "var(--accent)" : "#e2554f",
+    };
+  })();
   return (
     <div className="card period proj">
       <h2>
@@ -187,6 +213,11 @@ function ProjectCard({ models, sel }: { models: DocModel[]; sel: Sel }) {
         </div>
       </div>
       <div className="eta">⚑ {eta}</div>
+      {deadlineLine && (
+        <div className="eta" style={{ color: deadlineLine.color, fontWeight: 600 }}>
+          {deadlineLine.txt}
+        </div>
+      )}
     </div>
   );
 }
