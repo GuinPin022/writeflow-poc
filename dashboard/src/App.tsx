@@ -7,6 +7,7 @@ import Login from "./components/Login";
 import Layout from "./components/Layout";
 import Overview from "./components/Overview";
 import TablePage from "./components/TablePage";
+import SettingsPage from "./components/SettingsPage";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -51,6 +52,7 @@ export default function App() {
       <Route element={<Layout email={session.user.email || ""} models={models} />}>
         <Route index element={<Overview />} />
         <Route path="table" element={<TablePage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

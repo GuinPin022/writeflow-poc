@@ -39,6 +39,9 @@ export default function Layout({ email, models }: { email: string; models: DocMo
           <NavLink to="/table" className={({ isActive }) => (isActive ? "active" : "")}>
             Tableau
           </NavLink>
+          <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+            Paramètres
+          </NavLink>
         </nav>
         <div className="spacer" />
         <span className="user">

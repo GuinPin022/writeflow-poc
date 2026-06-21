@@ -15,6 +15,7 @@ export interface DocModel {
   deadline?: string; // echeance du document (AAAA-MM-JJ), absent = aucune
   wordCount?: number; // compte de mots absolu courant (selon Word), absent = inconnu
   dailyGoal: number; // objectif quotidien courant (defaut si pas d'historique)
+  weeklyGoal: number; // objectif hebdo courant
   days: Record<string, DayData>;
 }
 /** "all" = tous les documents agreges ; sinon un doc.id. */
@@ -53,7 +54,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
       .eq("user_id", userId),
     supabase
       .from("documents")
-      .select("doc_id, doc_name, daily_goal, target, deadline, word_count, theme")
+      .select("doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme")
       .eq("user_id", userId),
     supabase
       .from("goal_history")
@@ -70,7 +71,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
   const ensure = (id: string, name?: string): DocModel => {
     let d = docs.get(id);
     if (!d) {
-      d = { id, name: name || id, theme: "brume-onde", target: 0, dailyGoal: 500, days: {} };
+      d = { id, name: name || id, theme: "brume-onde", target: 0, dailyGoal: 500, weeklyGoal: 2500, days: {} };
       docs.set(id, d);
     }
     if (name) d.name = name;
@@ -85,6 +86,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     d.deadline = r.deadline || undefined;
     d.wordCount = r.word_count != null ? Number(r.word_count) : undefined;
     d.dailyGoal = Number(r.daily_goal) || 500;
+    d.weeklyGoal = Number(r.weekly_goal) || 2500;
   }
 
   // Historique des objectifs, par document (croissant par date).
