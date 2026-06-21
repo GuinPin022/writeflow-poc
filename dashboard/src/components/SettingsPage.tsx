@@ -110,6 +110,36 @@ function DocCard({
 
   const commit = (patch: DocSettingsPatch) => run(() => saveDocSettings(userId, doc, patch));
   const num = (v: string) => Math.max(0, parseInt(v, 10) || 0);
+  const [importMsg, setImportMsg] = useState("");
+
+  // Import d'historique DANS ce document : ne remplit que les jours non deja suivis.
+  const onImportFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = ""; // permet de re-choisir le meme fichier ensuite
+    if (!f) return;
+    setImportMsg("Lecture…");
+    const res = parseHistoryCsv(await f.text());
+    if (res.error) {
+      setImportMsg(res.error);
+      return;
+    }
+    setState("saving");
+    try {
+      const r = await importHistory(userId, doc.id, doc.name, res.rows, {
+        skipDays: new Set(Object.keys(doc.days)),
+        createDoc: false,
+      });
+      await reload();
+      setState("saved");
+      window.setTimeout(() => setState("idle"), 1500);
+      setImportMsg(
+        `✓ ${r.inserted} jour(s) importé(s)${r.skipped ? ` · ${r.skipped} ignoré(s) (déjà suivis)` : ""}.`
+      );
+    } catch {
+      setState("error");
+      setImportMsg("Erreur pendant l'import.");
+    }
+  };
 
   // Suppression definitive : pas de setState apres reload (la carte est demontee).
   const onDelete = async () => {
@@ -215,10 +245,15 @@ function DocCard({
         <button className="btn" onClick={() => run(() => setDocHidden(userId, doc, !doc.hidden))}>
           {doc.hidden ? "Réafficher" : "Masquer"}
         </button>
+        <label className="btn file-btn">
+          Importer historique
+          <input type="file" accept=".csv,text/csv" onChange={onImportFile} hidden />
+        </label>
         <button className="btn danger" onClick={onDelete}>
           Supprimer
         </button>
       </div>
+      {importMsg && <p className="import-msg">{importMsg}</p>}
     </div>
   );
 }
