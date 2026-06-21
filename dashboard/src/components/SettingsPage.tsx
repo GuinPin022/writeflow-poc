@@ -1,16 +1,88 @@
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import { usePage } from "./Layout";
 import {
   DocModel,
   DocSettingsPatch,
+  ImportRow,
   saveDocSettings,
   setDocHidden,
   setDefaultDoc,
   deleteDoc,
+  parseHistoryCsv,
+  importHistory,
 } from "../lib/data";
 import { THEMES, THEME_LABELS } from "../lib/paliers";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+/* ---------- Import d'historique : nouveau document ---------- */
+function ImportNewDoc({ userId, reload }: { userId: string; reload: () => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [rows, setRows] = useState<ImportRow[] | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFileName(f.name);
+    const res = parseHistoryCsv(await f.text());
+    if (res.error) {
+      setRows(null);
+      setMsg(res.error);
+      return;
+    }
+    setRows(res.rows);
+    setMsg(
+      `${res.rows.length} jour(s) détecté(s) — du ${res.rows[0].day} au ${res.rows[res.rows.length - 1].day}.`
+    );
+  };
+
+  const doImport = async () => {
+    if (!rows || !name.trim()) return;
+    setBusy(true);
+    try {
+      const docId = crypto.randomUUID();
+      const r = await importHistory(userId, docId, name.trim(), rows, { createDoc: true });
+      await reload();
+      setMsg(`✓ ${r.inserted} jour(s) importé(s) dans « ${name.trim()} ».`);
+      setName("");
+      setRows(null);
+      setFileName("");
+    } catch {
+      setMsg("Erreur pendant l'import.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card import-card">
+      <h2>Importer un historique (nouveau document)</h2>
+      <p className="import-hint">
+        Fichier CSV — colonnes : <b>date</b>, <b>objectif quotidien</b>, <b>objectif hebdo</b>,{" "}
+        <b>mots écrits</b>. Dates AAAA-MM-JJ ou JJ/MM/AAAA.
+      </p>
+      <div className="import-row">
+        <input
+          type="text"
+          placeholder="Nom du nouveau document"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <label className="btn file-btn">
+          {fileName || "Choisir un CSV"}
+          <input type="file" accept=".csv,text/csv" onChange={onFile} hidden />
+        </label>
+        <button className="btn primary" disabled={!rows || !name.trim() || busy} onClick={doImport}>
+          {busy ? "Import…" : "Importer"}
+        </button>
+      </div>
+      {msg && <p className="import-msg">{msg}</p>}
+    </div>
+  );
+}
 
 function DocCard({
   doc,
@@ -156,6 +228,7 @@ export default function SettingsPage() {
   return (
     <>
       <h1 className="page">Paramètres des documents</h1>
+      <ImportNewDoc userId={userId} reload={reload} />
       {models.length === 0 && <div className="empty-note">Aucun document.</div>}
       {models.map((d) => (
         <DocCard key={d.id} doc={d} userId={userId} reload={reload} />

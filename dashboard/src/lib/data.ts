@@ -271,6 +271,149 @@ export async function deleteDoc(userId: string, docId: string): Promise<void> {
   if (e3) throw e3;
 }
 
+/* ===================== Import d'historique (CSV) ===================== */
+export interface ImportRow {
+  day: string; // AAAA-MM-JJ
+  daily: number; // objectif quotidien ce jour-la
+  weekly: number; // objectif hebdo ce jour-la
+  words: number; // mots ecrits ce jour-la
+}
+
+/** Normalise une date "AAAA-MM-JJ" ou "JJ/MM/AAAA" (ou JJ-MM-AAAA) -> "AAAA-MM-JJ". */
+function parseImportDate(s: string | undefined): string | null {
+  if (!s) return null;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return null;
+}
+
+/**
+ * Parse un CSV "date, objectif quotidien, objectif hebdo, mots ecrits".
+ * Accepte ',' ou ';' comme separateur, un eventuel en-tete, et les dates
+ * AAAA-MM-JJ ou JJ/MM/AAAA. Renvoie les lignes triees par date.
+ */
+export function parseHistoryCsv(text: string): { rows: ImportRow[]; error?: string } {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (!lines.length) return { rows: [], error: "Fichier vide." };
+  const delim = lines[0].includes(";") ? ";" : ",";
+  const num = (cell: string | undefined): number => {
+    const raw = (cell ?? "").replace(/\s/g, "").replace(",", ".");
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const rows: ImportRow[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const cells = lines[i].split(delim).map((c) => c.trim());
+    const day = parseImportDate(cells[0]);
+    if (!day) {
+      if (i === 0) continue; // ligne d'en-tete : on l'ignore
+      return { rows: [], error: `Date invalide à la ligne ${i + 1} : « ${cells[0]} »` };
+    }
+    rows.push({ day, daily: num(cells[1]), weekly: num(cells[2]), words: num(cells[3]) });
+  }
+  if (!rows.length) return { rows: [], error: "Aucune ligne de données valide." };
+  rows.sort((a, b) => a.day.localeCompare(b.day));
+  return { rows };
+}
+
+/**
+ * Importe un historique pour un document (existant ou nouveau).
+ * - daily_stats : un upsert par jour (mots -> net ET productive), en sautant les
+ *   jours deja presents (`skipDays`) pour ne pas ecraser un suivi reel ;
+ * - goal_history : une entree datee a chaque changement d'objectif (escalier) ;
+ * - documents : cree/maj la ligne uniquement pour un nouveau doc (`createDoc`).
+ */
+export async function importHistory(
+  userId: string,
+  docId: string,
+  docName: string,
+  rows: ImportRow[],
+  opts: { skipDays?: Set<string>; createDoc?: boolean }
+): Promise<{ inserted: number; skipped: number }> {
+  const skip = opts.skipDays ?? new Set<string>();
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day));
+  const now = new Date().toISOString();
+
+  const statRows = sorted
+    .filter((r) => r.words > 0 && !skip.has(r.day))
+    .map((r) => ({
+      user_id: userId,
+      doc_id: docId,
+      doc_name: docName,
+      day: r.day,
+      productive: r.words,
+      net: r.words,
+      typed: 0,
+      pasted: 0,
+      cut: 0,
+      updated_at: now,
+    }));
+  if (statRows.length) {
+    const { error } = await supabase
+      .from("daily_stats")
+      .upsert(statRows, { onConflict: "user_id,doc_id,day" });
+    if (error) throw error;
+  }
+
+  const histRows: {
+    user_id: string;
+    doc_id: string;
+    doc_name: string;
+    daily_goal: number;
+    weekly_goal: number;
+    target: number;
+    changed_at: string;
+  }[] = [];
+  let prevD = -1;
+  let prevW = -1;
+  for (const r of sorted) {
+    if (r.daily !== prevD || r.weekly !== prevW) {
+      histRows.push({
+        user_id: userId,
+        doc_id: docId,
+        doc_name: docName,
+        daily_goal: r.daily,
+        weekly_goal: r.weekly,
+        target: 0,
+        changed_at: new Date(r.day + "T12:00:00").toISOString(),
+      });
+      prevD = r.daily;
+      prevW = r.weekly;
+    }
+  }
+  if (histRows.length) {
+    const { error } = await supabase
+      .from("goal_history")
+      .upsert(histRows, { onConflict: "user_id,doc_id,changed_at", ignoreDuplicates: true });
+    if (error) throw error;
+  }
+
+  if (opts.createDoc) {
+    const last = sorted[sorted.length - 1];
+    const { error } = await supabase.from("documents").upsert(
+      {
+        user_id: userId,
+        doc_id: docId,
+        doc_name: docName,
+        daily_goal: last?.daily || 0,
+        weekly_goal: last?.weekly || 0,
+        target: 0,
+        theme: "brume-onde",
+        updated_at: now,
+      },
+      { onConflict: "user_id,doc_id" }
+    );
+    if (error) throw error;
+  }
+
+  return { inserted: statRows.length, skipped: sorted.length - statRows.length };
+}
+
 /* ===================== Agregation (doc courant ou "Tous") ===================== */
 /** Docs pris en compte : "Tous" exclut les masques ; un id precis renvoie ce doc. */
 export function activeDocs(models: DocModel[], sel: Sel): DocModel[] {
