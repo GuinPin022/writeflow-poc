@@ -6,6 +6,7 @@ export interface DayData {
   prod: number; // mots productifs (effort)
   net: number; // variation Word (signee)
   goal: number; // objectif quotidien EN VIGUEUR ce jour-la
+  weekGoal?: number; // objectif hebdo EN VIGUEUR ce jour-la (charge pour l'export CSV)
 }
 export interface DocModel {
   id: string;
@@ -28,6 +29,7 @@ export type Sel = "all" | string;
 interface GoalChange {
   at: string;
   daily: number;
+  weekly: number;
 }
 
 /* ===================== Dates ===================== */
@@ -75,7 +77,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
       .eq("user_id", userId),
     supabase
       .from("goal_history")
-      .select("doc_id, daily_goal, changed_at")
+      .select("doc_id, daily_goal, weekly_goal, changed_at")
       .eq("user_id", userId)
       .order("changed_at", { ascending: true }),
   ]);
@@ -125,32 +127,38 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
   const histByDoc = new Map<string, GoalChange[]>();
   for (const r of histRes.data || []) {
     const arr = histByDoc.get(r.doc_id) || [];
-    arr.push({ at: r.changed_at, daily: Number(r.daily_goal) || 0 });
+    arr.push({ at: r.changed_at, daily: Number(r.daily_goal) || 0, weekly: Number(r.weekly_goal) || 0 });
     histByDoc.set(r.doc_id, arr);
   }
 
-  // Objectif en vigueur a une date (escalier) ; repli = objectif courant du doc.
-  const goalForDay = (docId: string, day: string, fallback: number): number => {
+  // Objectifs (quotidien + hebdo) en vigueur a une date (escalier) ; repli = objectifs
+  // courants du doc.
+  const goalsForDay = (
+    docId: string,
+    day: string,
+    fbDaily: number,
+    fbWeekly: number
+  ): { daily: number; weekly: number } => {
     const hist = histByDoc.get(docId);
-    if (!hist || !hist.length) return fallback;
-    let chosen = 0;
-    let found = false;
+    if (!hist || !hist.length) return { daily: fbDaily, weekly: fbWeekly };
+    let chosen: GoalChange | null = null;
     for (const h of hist) {
-      if (dkey(new Date(h.at)) <= day) {
-        chosen = h.daily;
-        found = true;
-      } else break;
+      if (dkey(new Date(h.at)) <= day) chosen = h;
+      else break;
     }
-    return found ? chosen : hist[0].daily || fallback;
+    if (chosen) return { daily: chosen.daily, weekly: chosen.weekly };
+    return { daily: hist[0].daily || fbDaily, weekly: hist[0].weekly || fbWeekly };
   };
 
   // Stats journalieres.
   for (const r of statsRes.data || []) {
     const d = ensure(r.doc_id, r.doc_name);
+    const g = goalsForDay(r.doc_id, r.day, d.dailyGoal, d.weeklyGoal);
     d.days[r.day] = {
       prod: Number(r.productive) || 0,
       net: Number(r.net) || 0,
-      goal: goalForDay(r.doc_id, r.day, d.dailyGoal),
+      goal: g.daily,
+      weekGoal: g.weekly,
     };
   }
 
@@ -331,6 +339,88 @@ export async function deleteDoc(userId: string, docId: string): Promise<void> {
   if (e3) throw e3;
 }
 
+/**
+ * FUSIONNE deux documents : reattribue tout l'historique de `fromId` (la source)
+ * vers `keepId` (la cible), puis supprime la source. Sert a recoller un document
+ * qui s'est dedouble (meme oeuvre, deux GUID) apres un deplacement de fichier.
+ *
+ * Mecanique :
+ *  - daily_stats : pour chaque jour de la source, si la cible a deja une ligne ce
+ *    jour-la, on ADDITIONNE (productive/net/typed/pasted/cut) ; sinon on reattribue.
+ *    La cle unique (user_id, doc_id, day) interdit un simple "renommage" du doc_id.
+ *  - goal_history : on GARDE celui de la cible (objectifs supposes identiques) ; on
+ *    supprime celui de la source.
+ *  - documents : on GARDE la ligne cible telle quelle (donc son word_count : les
+ *    deux IDs pointent sur le meme texte reel, sommer doublerait projectLength) ; on
+ *    supprime la ligne source.
+ *
+ * Irreversible. Attention : si le fichier source est rouvert dans Word avec le suivi
+ * actif, le plugin recreera sa ligne (meme limite que deleteDoc).
+ */
+export async function mergeDocs(
+  userId: string,
+  keepId: string,
+  keepName: string,
+  fromId: string
+): Promise<{ merged: number }> {
+  if (!keepId || !fromId || keepId === fromId) {
+    throw new Error("Fusion impossible : documents identiques ou invalides.");
+  }
+
+  // 1) Lire les stats des deux documents.
+  const cols = "day, productive, net, typed, pasted, cut";
+  const [srcRes, keepRes] = await Promise.all([
+    supabase.from("daily_stats").select(cols).eq("user_id", userId).eq("doc_id", fromId),
+    supabase.from("daily_stats").select(cols).eq("user_id", userId).eq("doc_id", keepId),
+  ]);
+  if (srcRes.error) throw srcRes.error;
+  if (keepRes.error) throw keepRes.error;
+
+  // 2) Indexer la cible par jour, puis combiner chaque jour de la source.
+  type Stat = { day: string; productive: number; net: number; typed: number; pasted: number; cut: number };
+  const n = (v: unknown): number => Number(v) || 0;
+  const keepByDay = new Map<string, Stat>();
+  for (const r of keepRes.data || []) {
+    keepByDay.set(r.day, { day: r.day, productive: n(r.productive), net: n(r.net), typed: n(r.typed), pasted: n(r.pasted), cut: n(r.cut) });
+  }
+
+  const now = new Date().toISOString();
+  const mergedRows = (srcRes.data || []).map((r) => {
+    const k = keepByDay.get(r.day);
+    return {
+      user_id: userId,
+      doc_id: keepId,
+      doc_name: keepName,
+      day: r.day,
+      productive: n(r.productive) + (k?.productive ?? 0),
+      net: n(r.net) + (k?.net ?? 0),
+      typed: n(r.typed) + (k?.typed ?? 0),
+      pasted: n(r.pasted) + (k?.pasted ?? 0),
+      cut: n(r.cut) + (k?.cut ?? 0),
+      updated_at: now,
+    };
+  });
+
+  // 3) Ecrire les totaux sur la cible (ecrase les jours en collision, insere les autres).
+  if (mergedRows.length) {
+    const { error } = await supabase
+      .from("daily_stats")
+      .upsert(mergedRows, { onConflict: "user_id,doc_id,day" });
+    if (error) throw error;
+  }
+
+  // 4) Supprimer entierement la source (stats, historique d'objectifs, fiche document).
+  const del = async (table: string) => {
+    const { error } = await supabase.from(table).delete().eq("user_id", userId).eq("doc_id", fromId);
+    if (error) throw error;
+  };
+  await del("daily_stats");
+  await del("goal_history");
+  await del("documents");
+
+  return { merged: mergedRows.length };
+}
+
 /* ===================== Import d'historique (CSV) ===================== */
 export interface ImportRow {
   day: string; // AAAA-MM-JJ
@@ -474,6 +564,33 @@ export async function importHistory(
   return { inserted: statRows.length, skipped: sorted.length - statRows.length };
 }
 
+/* ===================== Export CSV (par document) ===================== */
+/**
+ * Construit le CSV d'un document, une ligne par jour suivi (tri croissant).
+ * Colonnes : date ; objectif quotidien ; objectif hebdo ; net ; productif.
+ * - objectifs = ceux EN VIGUEUR ce jour-la (escalier goal_history), repli sur
+ *   l'objectif courant du doc si aucun historique pour ce jour ;
+ * - separateur « ; » et BOM UTF-8 pour s'ouvrir proprement dans Excel FR.
+ * Nombres bruts (pas de separateur de milliers) pour rester re-importable.
+ */
+export function buildDocCsv(doc: DocModel): string {
+  const header = "date;objectif quotidien;objectif hebdo;net;productif";
+  const lines = Object.keys(doc.days)
+    .sort()
+    .map((k) => {
+      const c = doc.days[k];
+      const weekly = c.weekGoal ?? doc.weeklyGoal;
+      return [k, c.goal, weekly, c.net, c.prod].join(";");
+    });
+  return "﻿" + [header, ...lines].join("\r\n");
+}
+
+/** Nom de fichier sur : le nom du doc nettoye, replis sur son id, suffixe .csv. */
+export function csvFileName(doc: DocModel): string {
+  const base = (doc.name || doc.id).replace(/[\\/:*?"<>|]+/g, "_").trim() || doc.id;
+  return `${base}.csv`;
+}
+
 /* ===================== Agregation (doc courant ou "Tous") ===================== */
 /** Docs pris en compte : "Tous" exclut les masques ; un id precis renvoie ce doc. */
 export function activeDocs(models: DocModel[], sel: Sel): DocModel[] {
@@ -507,7 +624,7 @@ export function sumPeriod(models: DocModel[], sel: Sel, keys: string[], f: keyof
   let s = 0;
   keys.forEach((k) => {
     const c = aggDay(models, sel, k);
-    if (c) s += c[f];
+    if (c) s += c[f] ?? 0;
   });
   return s;
 }
@@ -553,6 +670,48 @@ export function cumNetMap(models: DocModel[], sel: Sel): Record<string, number> 
   });
   return out;
 }
+/** Texte ETA d'un projet (donut) : atteint / estimation en jours / rythme insuffisant. */
+export function etaText(cur: number, tgt: number, speed: number): string {
+  if (cur >= tgt && tgt > 0) return "objectif atteint ✓";
+  if (speed > 0 && tgt > 0)
+    return `ETA : ~${Math.ceil((tgt - cur) / speed)} j (≈ ${fmt(speed)} net/j)`;
+  return "rythme insuffisant pour estimer";
+}
+
+export interface DeadlineLine {
+  txt: string;
+  color: string;
+}
+/**
+ * Ligne "echeance intelligente" d'un document : jours restants + rythme requis vs
+ * rythme reel. Renvoie null si pas d'echeance ou pas de cible. Partage Overview↔Public.
+ */
+export function deadlineLine(
+  deadline: string | undefined | null,
+  cur: number,
+  tgt: number,
+  speed: number
+): DeadlineLine | null {
+  if (!deadline || tgt <= 0) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dd = new Date(deadline + "T00:00:00");
+  const daysLeft = Math.ceil((dd.getTime() - today.getTime()) / 86_400_000);
+  const dStr = dd.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const remaining = Math.max(0, tgt - cur);
+  if (cur >= tgt) return { txt: `📅 ${dStr} — objectif déjà atteint ✓`, color: "var(--accent)" };
+  if (daysLeft <= 0)
+    return { txt: `📅 Échéance dépassée (${dStr}) · ${fmt(remaining)} mots restants`, color: "#e2554f" };
+  const need = remaining / daysLeft;
+  const onTrack = speed >= need;
+  return {
+    txt: `📅 ${dStr} · ${daysLeft} j · requis ${fmt(need)}/j ${
+      onTrack ? "✅ dans les temps" : "⚠️ en retard"
+    }`,
+    color: onTrack ? "var(--accent)" : "#e2554f",
+  };
+}
+
 export function netSpeed30(models: DocModel[], sel: Sel): number {
   let sum = 0,
     days = 0;

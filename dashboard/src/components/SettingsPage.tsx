@@ -12,8 +12,11 @@ import {
   setDocPublicTitle,
   setDefaultDoc,
   deleteDoc,
+  mergeDocs,
   parseHistoryCsv,
   importHistory,
+  buildDocCsv,
+  csvFileName,
   getRolloverHour,
   setRolloverHour,
 } from "../lib/data";
@@ -161,17 +164,21 @@ function ImportNewDoc({ userId, reload }: { userId: string; reload: () => Promis
 
 function DocCard({
   doc,
+  allDocs,
   userId,
   reload,
   profilePublic,
 }: {
   doc: DocModel;
+  allDocs: DocModel[];
   userId: string;
   reload: () => Promise<void>;
   profilePublic: boolean;
 }) {
   const [state, setState] = useState<SaveState>("idle");
   const [open, setOpen] = useState(false); // carte repliee par defaut
+  const [mergeFrom, setMergeFrom] = useState(""); // doc a absorber dans celui-ci
+  const others = allDocs.filter((d) => d.id !== doc.id); // candidats a la fusion
 
   // Enrobe une ecriture : etat saving -> reload -> saved (ou error).
   const run = async (fn: () => Promise<void>) => {
@@ -216,6 +223,41 @@ function DocCard({
     } catch {
       setState("error");
       setImportMsg("Erreur pendant l'import.");
+    }
+  };
+
+  // Export CSV de ce document : declenche un telechargement cote navigateur.
+  const onExport = () => {
+    const blob = new Blob([buildDocCsv(doc)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = csvFileName(doc);
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Fusion : absorbe le document choisi (source) DANS ce document (cible), puis le supprime.
+  const onMerge = async () => {
+    const src = others.find((d) => d.id === mergeFrom);
+    if (!src) return;
+    const ok = window.confirm(
+      `Fusionner « ${src.name} » DANS « ${doc.name} » ?\n\n` +
+        `Tout l'historique de « ${src.name} » sera transféré dans « ${doc.name} » ` +
+        `(les jours communs sont additionnés), puis « ${src.name} » sera supprimé.\n\n` +
+        `Action irréversible. Note : si tu rouvres le fichier absorbé dans Word avec le ` +
+        `suivi actif, il sera recréé comme document séparé.`
+    );
+    if (!ok) return;
+    setState("saving");
+    try {
+      await mergeDocs(userId, doc.id, doc.name, src.id);
+      setMergeFrom("");
+      await reload();
+      setState("saved");
+      window.setTimeout(() => setState("idle"), 1500);
+    } catch {
+      setState("error");
     }
   };
 
@@ -355,10 +397,38 @@ function DocCard({
           Importer historique
           <input type="file" accept=".csv,text/csv" onChange={onImportFile} hidden />
         </label>
+        <button
+          className="btn"
+          disabled={Object.keys(doc.days).length === 0}
+          title="Télécharger l'historique de ce document (date, objectifs, net, productif)"
+          onClick={onExport}
+        >
+          Exporter CSV
+        </button>
         <button className="btn danger" onClick={onDelete}>
           Supprimer
         </button>
       </div>
+      {others.length > 0 && (
+        <div className="doc-actions" style={{ marginTop: 8 }}>
+          <select value={mergeFrom} onChange={(e) => setMergeFrom(e.target.value)}>
+            <option value="">Absorber un document…</option>
+            {others.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn"
+            disabled={!mergeFrom}
+            title="Transférer l'historique du document choisi dans celui-ci, puis le supprimer"
+            onClick={onMerge}
+          >
+            Fusionner ici
+          </button>
+        </div>
+      )}
       {importMsg && <p className="import-msg">{importMsg}</p>}
         </>
       )}
@@ -387,7 +457,14 @@ export default function SettingsPage() {
       <ImportNewDoc userId={userId} reload={reload} />
       {models.length === 0 && <div className="empty-note">Aucun document.</div>}
       {models.map((d) => (
-        <DocCard key={d.id} doc={d} userId={userId} reload={reload} profilePublic={profilePublic} />
+        <DocCard
+          key={d.id}
+          doc={d}
+          allDocs={models}
+          userId={userId}
+          reload={reload}
+          profilePublic={profilePublic}
+        />
       ))}
       <p style={{ marginTop: 4, color: "var(--muted)", fontSize: 13 }}>
         Un document « par défaut » est celui chargé au démarrage du dashboard. Un document « masqué »

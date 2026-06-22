@@ -1,6 +1,5 @@
-import { useState, ReactNode } from "react";
+import { useState } from "react";
 import { usePage } from "./Layout";
-import { Tier } from "../lib/paliers";
 import {
   DocModel,
   Sel,
@@ -15,341 +14,42 @@ import {
   targetTotal,
   projectLength,
   netSpeed30,
+  etaText,
+  deadlineLine,
   activeDocs,
-  badgeForDoc,
-  bestBadgeOfDoc,
-  bestBadgeAggDay,
   streakNow,
   recordStreak,
   qWritten,
   qPalier,
   qGoal,
 } from "../lib/data";
+import {
+  PeriodCard,
+  PeriodBadges,
+  StreakCard,
+  Donut,
+  Chart14,
+  BadgeCalendar,
+} from "./cards";
 
-/* ---------- badges ---------- */
-function Chip({ b, title }: { b: Tier; title: string }) {
-  return (
-    <span className="bd-chip" title={`${title} — ${b.n}`}>
-      {b.e}
-    </span>
-  );
-}
-function Blank() {
-  return (
-    <span className="bd-chip empty" title="aucun palier">
-      ·
-    </span>
-  );
-}
-
-/** Badges d'une carte periode (par-jour si 1 doc, meilleur par doc si "Tous"). */
-function PeriodBadges({
-  models,
-  sel,
-  keys,
-  single,
-}: {
-  models: DocModel[];
-  sel: Sel;
-  keys: string[];
-  single?: boolean;
-}): ReactNode {
-  if (sel === "all") {
-    return (
-      <div className="bd-row">
-        {activeDocs(models, sel).map((d) => {
-          const b = bestBadgeOfDoc(d, keys);
-          return b ? <Chip key={d.id} b={b} title={d.name} /> : <Blank key={d.id} />;
-        })}
-      </div>
-    );
-  }
-  const doc = models.find((d) => d.id === sel)!;
-  if (single) {
-    const b = badgeForDoc(doc, keys[0]);
-    return b ? (
-      <div className="bd-today">
-        <span className="bd-e">{b.e}</span>
-        <span className="bd-n">{b.n}</span>
-      </div>
-    ) : null;
-  }
-  return (
-    <div className="bd-row">
-      {keys
-        .slice()
-        .reverse()
-        .map((k) => {
-          const b = badgeForDoc(doc, k);
-          return b ? (
-            <Chip key={k} b={b} title={parseKey(k).toLocaleDateString("fr-FR")} />
-          ) : (
-            <Blank key={k} />
-          );
-        })}
-    </div>
-  );
-}
-
-/* ---------- carte periode (reference = Word) ---------- */
-function PeriodCard({
-  title,
-  meta,
-  word,
-  goal,
-  prod,
-  badges,
-  className,
-}: {
-  title: string;
-  meta?: ReactNode;
-  word: number;
-  goal: number;
-  prod: number;
-  badges?: ReactNode;
-  className?: string;
-}) {
-  const pct = goal > 0 ? Math.round((word / goal) * 100) : 0;
-  const shown = Math.min(100, Math.max(0, pct));
-  const rest = Math.max(0, goal - word);
-  const done = word >= goal && goal > 0;
-  return (
-    <div className={"card period" + (className ? " " + className : "")}>
-      <h2>
-        {title}
-        {meta}
-        <span className="pct">{pct}%</span>
-      </h2>
-      <div className="top">
-        <span className="big w" style={{ color: "var(--blue)" }}>
-          {fmt(word)}
-        </span>
-        <span className="goal">/ {fmt(goal)} mots Word</span>
-      </div>
-      <div className="track">
-        <div className={"fill" + (done ? " done" : "")} style={{ width: shown + "%" }} />
-      </div>
-      <div className="rest">{done ? "✓ objectif atteint" : fmt(rest) + " mots Word restants"}</div>
-      <div className="split">
-        <span className="w">
-          Word{" "}
-          <b className="w">
-            {word >= 0 ? "+" : ""}
-            {fmt(word)}
-          </b>
-        </span>
-        <span>
-          Productif <b>{fmt(prod)}</b>
-        </span>
-      </div>
-      {badges}
-    </div>
-  );
-}
-
-/* ---------- carte projet (donut) ---------- */
+/* ---------- carte projet (donut) — calcule cote prive puis rend le Donut partage ---------- */
 function ProjectCard({ models, sel }: { models: DocModel[]; sel: Sel }) {
   const cur = projectLength(models, sel);
   const tgt = targetTotal(models, sel);
   const pct = tgt > 0 ? Math.min(100, Math.round((cur / tgt) * 100)) : 0;
   const speed = netSpeed30(models, sel);
-  const C = 213.63;
-  const off = C * (1 - pct / 100);
-  const eta =
-    cur >= tgt && tgt > 0
-      ? "objectif atteint ✓"
-      : speed > 0 && tgt > 0
-        ? `ETA : ~${Math.ceil((tgt - cur) / speed)} j (≈ ${fmt(speed)} net/j)`
-        : "rythme insuffisant pour estimer";
-
-  // Échéance "intelligente" : visible seulement pour UN document (pas en mode "Tous").
   const doc = sel === "all" ? null : models.find((d) => d.id === sel);
-  const deadlineLine = (() => {
-    if (!doc?.deadline || tgt <= 0) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dd = new Date(doc.deadline + "T00:00:00");
-    const daysLeft = Math.ceil((dd.getTime() - today.getTime()) / 86_400_000);
-    const dStr = dd.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-    const remaining = Math.max(0, tgt - cur);
-    if (cur >= tgt) {
-      return { txt: `📅 ${dStr} — objectif déjà atteint ✓`, color: "var(--accent)" };
-    }
-    if (daysLeft <= 0) {
-      return { txt: `📅 Échéance dépassée (${dStr}) · ${fmt(remaining)} mots restants`, color: "#e2554f" };
-    }
-    const need = remaining / daysLeft; // mots/jour requis pour tenir
-    const onTrack = speed >= need;
-    return {
-      txt: `📅 ${dStr} · ${daysLeft} j · requis ${fmt(need)}/j ${
-        onTrack ? "✅ dans les temps" : "⚠️ en retard"
-      }`,
-      color: onTrack ? "var(--accent)" : "#e2554f",
-    };
-  })();
   return (
-    <div className="card period proj">
-      <h2>
-        {sel === "all" ? "Projet — tous docs" : "Projet — total"}
-        <span className="pct">{pct}%</span>
-      </h2>
-      <div className="donut-wrap">
-        <div className="donut">
-          <svg width="84" height="84" viewBox="0 0 84 84">
-            <circle cx="42" cy="42" r="34" fill="none" stroke="var(--soft)" strokeWidth="9" />
-            <circle
-              cx="42"
-              cy="42"
-              r="34"
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="9"
-              strokeLinecap="round"
-              strokeDasharray={C}
-              strokeDashoffset={off}
-              transform="rotate(-90 42 42)"
-            />
-          </svg>
-          <div className="donut-c">{pct}%</div>
-        </div>
-        <div className="donut-meta">
-          <div className="big">{fmt(cur)}</div>
-          <div className="goal">/ {fmt(tgt)} mots</div>
-        </div>
-      </div>
-      <div className="eta">⚑ {eta}</div>
-      {deadlineLine && (
-        <div className="eta" style={{ color: deadlineLine.color, fontWeight: 600 }}>
-          {deadlineLine.txt}
-        </div>
-      )}
-    </div>
+    <Donut
+      title={sel === "all" ? "Projet — tous docs" : "Projet — total"}
+      pct={pct}
+      cur={cur}
+      tgt={tgt}
+      etaTxt={etaText(cur, tgt, speed)}
+      deadlineLine={deadlineLine(doc?.deadline, cur, tgt, speed)}
+    />
   );
 }
-
-/* ---------- graph 14 jours (barres empilees + ligne objectif) ---------- */
-function Chart14({ models, sel }: { models: DocModel[]; sel: Sel }) {
-  const win: string[] = [];
-  const dt = new Date();
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(dt);
-    d.setDate(dt.getDate() - i);
-    win.push(dkey(d));
-  }
-  const H = 150;
-  const usable = H - 20;
-  let mx = 1;
-  win.forEach((k) => {
-    const c = aggDay(models, sel, k);
-    if (c) mx = Math.max(mx, c.prod, Math.max(0, c.net), c.goal);
-  });
-  const n = win.length;
-  const base = H - 14;
-  const pts = win
-    .map((k, idx) => {
-      const c = dayAgg(models, sel, k);
-      const x = ((idx + 0.5) / n) * 100;
-      const y = base - (c.goal / mx) * usable;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-
-  return (
-    <div className="card" style={{ marginBottom: 14 }}>
-      <h2>
-        Activité — 14 derniers jours <span className="meta">Word + Productif empilés</span>
-      </h2>
-      <div className="chartbox">
-        <div className="chart-bars">
-          {win.map((k, idx) => {
-            const c = dayAgg(models, sel, k);
-            const netPos = Math.max(0, c.net);
-            const extra = Math.max(0, c.prod - netPos);
-            let hNet = Math.round((netPos / mx) * usable);
-            const hExtra = Math.round((extra / mx) * usable);
-            if (hNet + hExtra < 2) hNet = 2;
-            const isToday = idx === win.length - 1;
-            const lab = parseKey(k).getDate() + "/" + (parseKey(k).getMonth() + 1);
-            return (
-              <div className="col" key={k}>
-                <div
-                  className={"sbar" + (isToday ? " today" : "")}
-                  style={{ height: hNet + hExtra }}
-                  title={`Word ${c.net >= 0 ? "+" : ""}${fmt(c.net)} · Productif ${fmt(
-                    c.prod
-                  )} · objectif ${fmt(c.goal)}`}
-                >
-                  <div className="seg seg-extra" style={{ height: hExtra }} />
-                  <div className="seg seg-net" style={{ height: hNet }} />
-                </div>
-                <div className="d">{lab}</div>
-              </div>
-            );
-          })}
-        </div>
-        <svg className="overlay" preserveAspectRatio="none" viewBox={`0 0 100 ${H}`}>
-          <polyline
-            points={pts}
-            fill="none"
-            stroke="var(--amber)"
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-            strokeDasharray="4 3"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-      <div className="chips">
-        <span>
-          <i style={{ background: "var(--blue)" }} />
-          Word / net (bas)
-        </span>
-        <span>
-          <i style={{ background: "var(--cal2)" }} />
-          Productif en plus (haut)
-        </span>
-        <span>
-          <i className="ld" />
-          Objectif quotidien
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- calendrier 30 jours des paliers ---------- */
-function BadgeCalendar({ models, sel }: { models: DocModel[]; sel: Sel }) {
-  const days = lastDaysKeys(30).reverse();
-  return (
-    <div className="card">
-      <h2>
-        Paliers — 30 derniers jours <span className="meta">badge obtenu chaque jour</span>
-      </h2>
-      <div className="badge-cal">
-        {days.map((k) => {
-          const b =
-            sel === "all"
-              ? bestBadgeAggDay(models, sel, k)
-              : badgeForDoc(models.find((d) => d.id === sel)!, k);
-          return (
-            <div
-              className={"bcell" + (b ? "" : " empty")}
-              key={k}
-              title={parseKey(k).toLocaleDateString("fr-FR") + (b ? " — " + b.n : " — aucun palier")}
-            >
-              <div className="be">{b ? b.e : "·"}</div>
-              <div className="bn">{parseKey(k).getDate()}</div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- mini stats ---------- */
-// Les series (streakNow / recordStreak) et leurs criteres (qWritten/qPalier/qGoal)
-// vivent desormais dans lib/data.ts, partages avec la page de profil public.
 
 /* ===================== Page ===================== */
 export default function Overview() {
@@ -398,11 +98,7 @@ export default function Overview() {
         <PeriodCard
           title="Derniers"
           meta={
-            <select
-              className="mini"
-              value={recentN}
-              onChange={(e) => setRecentN(+e.target.value)}
-            >
+            <select className="mini" value={recentN} onChange={(e) => setRecentN(+e.target.value)}>
               {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                 <option key={n} value={n}>
                   {n} j
@@ -426,36 +122,27 @@ export default function Overview() {
       </div>
 
       <div className="grid row-3" style={{ marginBottom: 14 }}>
-        <div className="card stat">
-          <div className="lab">
-            <i className="ic" style={{ color: "var(--coral)" }}>
-              🔥
-            </i>{" "}
-            Série — jour écrit
-          </div>
-          <div className="num">{streakNow(models, sel, qWritten)} j</div>
-          <div className="sub">record : {recordStreak(models, sel, allKeys, qWritten)} j</div>
-        </div>
-        <div className="card stat">
-          <div className="lab">
-            <i className="ic" style={{ color: "var(--amber)" }}>
-              🎖️
-            </i>{" "}
-            Série — au moins un palier
-          </div>
-          <div className="num">{streakNow(models, sel, qPalier)} j</div>
-          <div className="sub">record : {recordStreak(models, sel, allKeys, qPalier)} j</div>
-        </div>
-        <div className="card stat">
-          <div className="lab">
-            <i className="ic" style={{ color: "var(--accent)" }}>
-              🎯
-            </i>{" "}
-            Série — objectif atteint
-          </div>
-          <div className="num">{streakNow(models, sel, qGoal)} j</div>
-          <div className="sub">record : {recordStreak(models, sel, allKeys, qGoal)} j</div>
-        </div>
+        <StreakCard
+          icon="🔥"
+          color="var(--coral)"
+          label="Série — jour écrit"
+          value={streakNow(models, sel, qWritten)}
+          record={recordStreak(models, sel, allKeys, qWritten)}
+        />
+        <StreakCard
+          icon="🎖️"
+          color="var(--amber)"
+          label="Série — au moins un palier"
+          value={streakNow(models, sel, qPalier)}
+          record={recordStreak(models, sel, allKeys, qPalier)}
+        />
+        <StreakCard
+          icon="🎯"
+          color="var(--accent)"
+          label="Série — objectif atteint"
+          value={streakNow(models, sel, qGoal)}
+          record={recordStreak(models, sel, allKeys, qGoal)}
+        />
       </div>
 
       <div className="grid row-2" style={{ marginBottom: 14 }}>
