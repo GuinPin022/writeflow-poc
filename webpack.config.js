@@ -45,6 +45,8 @@ module.exports = async (env, options) => {
           { from: "assets", to: "assets" },
           // Tableau de bord web statique, deploye sur le meme site GitHub Pages.
           { from: "dashboard.html", to: "[name][ext]" },
+          // Guide testeurs (mode d'emploi) en page HTML, deploye sur GitHub Pages.
+          { from: "guide.html", to: "[name][ext]" },
           // Scripts d'install testeurs, telechargeables depuis GitHub Pages.
           { from: "installer-writeflow.ps1", to: "[name][ext]" },
           { from: "installer-writeflow-mac.command", to: "[name][ext]" },

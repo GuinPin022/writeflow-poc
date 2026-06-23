@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WriteFlow — Guide testeurs</title>
+<style>
+  :root{
+    --accent:#1D9E75; --accent-strong:#0F6E56;
+    --amber:#BA7517;
+    --ink:#1f2328; --muted:#5f6b76; --hint:#8a949e;
+    --line:#e6e8eb; --bg:#f4f5f7; --card:#ffffff; --soft:#eef0f2;
+    --shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --ink:#e8eaed; --muted:#9aa3ad; --hint:#6b747d;
+      --line:#2a2f36; --bg:#16191d; --card:#1e2228; --soft:#23272e;
+      --shadow:0 1px 3px rgba(0,0,0,.3);
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);line-height:1.6;
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:24px 20px 80px;}
+  header.hero{display:flex;align-items:center;gap:14px;margin:8px 0 28px;}
+  .logo{
+    width:46px;height:46px;border-radius:12px;background:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:24px;flex:0 0 auto;
+  }
+  .hero h1{font-size:26px;margin:0;line-height:1.2;}
+  .hero .tag{font-size:14px;color:var(--muted);display:block;margin-top:2px;}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 24px;margin:18px 0;box-shadow:var(--shadow);
+  }
+  h2{font-size:20px;margin:4px 0 14px;display:flex;align-items:center;gap:8px;}
+  h2 .num{
+    width:28px;height:28px;border-radius:8px;background:var(--soft);color:var(--accent-strong);
+    display:inline-flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:0 0 auto;
+  }
+  h3{font-size:16px;margin:22px 0 8px;}
+  p{margin:10px 0;}
+  ol,ul{margin:8px 0;padding-left:22px;}
+  li{margin:6px 0;}
+  a{color:var(--accent-strong);font-weight:600;}
+  a:hover{color:var(--accent);}
+  code{
+    background:var(--soft);padding:2px 6px;border-radius:6px;font-size:13px;
+    font-family:'Cascadia Code',Consolas,Menlo,monospace;word-break:break-word;
+  }
+  .btn{
+    display:inline-block;background:var(--accent);color:#fff !important;text-decoration:none;
+    padding:9px 16px;border-radius:9px;font-weight:600;font-size:14px;margin:4px 0;
+  }
+  .btn:hover{background:var(--accent-strong);}
+  .reco{border:1.5px solid var(--accent);background:rgba(29,158,117,.06);}
+  .reco h3:first-child{margin-top:0;}
+  .badge{
+    display:inline-block;font-size:12px;font-weight:700;color:var(--accent-strong);
+    background:rgba(29,158,117,.14);padding:2px 9px;border-radius:999px;margin-left:6px;vertical-align:middle;
+  }
+  blockquote{
+    margin:14px 0;padding:10px 16px;border-left:3px solid var(--amber);
+    background:rgba(186,117,23,.08);border-radius:0 8px 8px 0;color:var(--muted);font-size:14px;
+  }
+  blockquote code{background:rgba(186,117,23,.14);}
+  details{margin:14px 0;border:1px solid var(--line);border-radius:10px;padding:0 16px;background:var(--soft);}
+  details[open]{padding-bottom:8px;}
+  summary{cursor:pointer;font-weight:600;padding:12px 0;font-size:14px;}
+  hr{border:none;border-top:1px solid var(--line);margin:0;}
+  .intro{color:var(--muted);}
+  footer{text-align:center;color:var(--hint);font-size:13px;margin-top:36px;}
+  .toc{font-size:14px;color:var(--muted);}
+  .toc a{color:var(--muted);font-weight:500;text-decoration:none;margin-right:14px;white-space:nowrap;}
+  .toc a:hover{color:var(--accent-strong);}
+  .tablist{list-style:none;padding-left:0;}
+  .tablist li{margin:8px 0;}
+  .tablist b{color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="logo">W</div>
+    <div>
+      <h1>WriteFlow — Guide testeurs</h1>
+      <span class="tag">Installer le plugin Word · suivre ton écriture · ton tableau de bord</span>
+    </div>
+  </header>
+
+  <p class="intro">
+    Merci de participer au test de WriteFlow 🙏 Ce guide explique comment <strong>créer ton compte</strong>,
+    <strong>installer le plugin Word</strong> (PC, Mac ou navigateur), <strong>suivre ta production</strong>
+    et <strong>consulter ton tableau de bord</strong> en ligne. Le suivi fonctionne dans Word ; si tu crées un
+    compte, tes statistiques se synchronisent pour apparaître sur le tableau de bord web — rien d'autre n'est partagé
+    tant que tu ne rends pas ton profil public.
+  </p>
+
+  <p class="toc">
+    <a href="#compte">1 · Compte</a>
+    <a href="#install">2 · Installer</a>
+    <a href="#suivi">3 · Suivre</a>
+    <a href="#objectifs">4 · Objectifs</a>
+    <a href="#dashboard">5 · Tableau de bord</a>
+    <a href="#profil">6 · Profil public</a>
+    <a href="#maj">7 · Mises à jour</a>
+    <a href="#probleme">8 · Problème ?</a>
+  </p>
+
+  <section class="card" id="compte">
+    <h2><span class="num">1</span> Créer ton compte</h2>
+    <p>À la première ouverture du panneau WriteFlow dans Word, un écran de connexion s'affiche. Trois choix :</p>
+    <ul>
+      <li><strong>Créer un compte</strong> → saisis un email + un mot de passe, puis <strong>Se connecter</strong>.
+        Ton suivi est alors <strong>synchronisé</strong> et visible sur le tableau de bord web.</li>
+      <li><strong>Se connecter</strong> → si tu as déjà un compte (même identifiants partout : add-in et site web).</li>
+      <li><strong>Utiliser sans compte (local)</strong> → tout reste sur cet appareil, rien n'est envoyé.
+        Parfait pour essayer, mais <strong>le tableau de bord web restera vide</strong> (il lit les données du compte).</li>
+    </ul>
+    <blockquote>👉 Pour profiter du tableau de bord en ligne, <strong>crée un compte</strong> et utilise les
+      <strong>mêmes identifiants</strong> dans Word et sur le site.</blockquote>
+  </section>
+
+  <section class="card" id="install">
+    <h2><span class="num">2</span> Installer le plugin Word</h2>
+    <p>Tu n'as <strong>rien à compiler ni à installer comme logiciel</strong>. Il te faut seulement un
+      compte <strong>Microsoft 365</strong> avec Word.</p>
+    <p>👉 <strong>Le plus simple : utilise Word sur le web</strong> (ci-dessous). Si tu préfères Word installé
+      sur ton ordinateur, un <strong>script t'évite toute la configuration manuelle</strong> — voir Mac / Windows plus bas.</p>
+
+    <h3>🌐 Word sur le web <span class="badge">Recommandé · tout OS</span></h3>
+    <div class="reco card" style="margin-top:8px;">
+      <p style="margin-top:0;">Rien à installer sur ta machine, pas de redémarrage.</p>
+      <ol>
+        <li>Télécharge le manifeste :
+          <a class="btn" href="https://guinpin022.github.io/writeflow-poc/manifest.github.xml" download>manifest.github.xml</a>
+          <br><small>(ou clic droit → « Enregistrer le lien sous… »).</small></li>
+        <li>Ouvre un document sur <a href="https://word.office.com" target="_blank" rel="noopener">word.office.com</a>.</li>
+        <li>Onglet <strong>Accueil → Compléments → Plus de paramètres</strong>.</li>
+        <li><strong>Charger mon complément</strong> → sélectionne le <code>manifest.github.xml</code> téléchargé.</li>
+      </ol>
+    </div>
+
+    <h3>🍎 Word Desktop — Mac <span class="badge">script auto</span></h3>
+    <ol>
+      <li>Télécharge le script :
+        <a href="https://guinpin022.github.io/writeflow-poc/installer-writeflow-mac.command" download>installer-writeflow-mac.command</a>.</li>
+      <li><strong>Double-clique</strong> dessus. <em>(Si macOS bloque : clic droit → <strong>Ouvrir</strong> → <strong>Ouvrir</strong>.)</em>
+        Le script copie tout seul le manifeste au bon endroit.</li>
+      <li><strong>Ferme et rouvre Word</strong> → onglet <strong>Accueil → Compléments</strong> → WriteFlow apparaît.</li>
+    </ol>
+    <blockquote>Si le double-clic affiche « permission refusée », ouvre le <strong>Terminal</strong> et tape :
+      <code>chmod +x ~/Downloads/installer-writeflow-mac.command</code>, puis double-clique à nouveau.</blockquote>
+
+    <h3>🪟 Word Desktop — Windows <span class="badge">script auto</span></h3>
+    <ol>
+      <li>Télécharge le script :
+        <a href="https://guinpin022.github.io/writeflow-poc/installer-writeflow.ps1" download>installer-writeflow.ps1</a>.</li>
+      <li><strong>Clic droit</strong> dessus → <strong>« Exécuter avec PowerShell »</strong>.
+        Le script crée le dossier, télécharge le manifeste et déclare le catalogue de confiance — sans droits administrateur.</li>
+      <li><strong>Ferme et rouvre Word</strong> → onglet <strong>Accueil → Compléments → (Avancé →) DOSSIER PARTAGÉ</strong> → choisis <strong>WriteFlow</strong>.</li>
+    </ol>
+    <blockquote>Si Windows bloque l'exécution du script, fais clic droit → <strong>Propriétés</strong> → coche
+      <strong>« Débloquer »</strong> en bas, valide, puis relance.</blockquote>
+
+    <details>
+      <summary>Installer Mac/Windows à la main (sans script)</summary>
+      <p><strong>Mac :</strong> copie <code>manifest.github.xml</code> dans
+        <code>~/Library/Containers/com.microsoft.Word/Data/Documents/wef</code> (crée le dossier s'il manque),
+        puis redémarre Word. <em>(Finder → menu <strong>Aller → Aller au dossier…</strong> pour coller le chemin.)</em></p>
+      <p><strong>Windows :</strong></p>
+      <ol>
+        <li>Place <code>manifest.github.xml</code> dans un dossier (ex. <code>C:\WriteFlow\</code>).</li>
+        <li>Word → <strong>Fichier → Options → Centre de gestion de la confidentialité → Paramètres du Centre… → Catalogues de compléments approuvés</strong>.</li>
+        <li>Ajoute le <strong>chemin du dossier</strong>, coche <strong>« Afficher dans le menu »</strong>, valide, <strong>redémarre Word</strong>.</li>
+        <li>Onglet <strong>Accueil → Compléments → Avancé → DOSSIER PARTAGÉ</strong> → choisis WriteFlow.</li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="card" id="suivi">
+    <h2><span class="num">3</span> Activer le suivi</h2>
+    <ol>
+      <li>Ouvre le panneau WriteFlow (bouton dans l'onglet <strong>Accueil</strong>) et connecte-toi (étape 1).</li>
+      <li>Va sur l'onglet <strong>Document</strong> et active l'interrupteur <strong>« Suivi d'écriture »</strong>
+        (il passe sur <strong>Actif</strong>). Le suivi relève ta production toutes les 30 secondes.</li>
+      <li>Écris normalement 🙂 Tes statistiques s'accumulent par jour et par document, et remontent toutes seules
+        si tu es connecté.</li>
+    </ol>
+    <p>Le panneau a quatre onglets :</p>
+    <ul class="tablist">
+      <li><b>Document</b> — l'interrupteur de suivi, l'avancement du document ouvert (mots / cible),
+        ton objectif du jour avec les paliers, le graphe des 7 derniers jours et un mini-calendrier.</li>
+      <li><b>Global</b> — tes totaux tous documents confondus : aujourd'hui, la semaine, le calendrier 12 semaines,
+        ton record, ta moyenne, le nombre de documents et de jours actifs.</li>
+      <li><b>Réglages</b> — les objectifs et l'apparence du document (voir étape 4).</li>
+      <li><b>POC</b> — vue technique de mesure (réservée aux tests) ; tu peux l'ignorer.</li>
+    </ul>
+    <blockquote>Le bouton <strong>📊 Tableau de bord</strong> en haut du panneau ouvre ton tableau de bord web
+      dans le navigateur.</blockquote>
+  </section>
+
+  <section class="card" id="objectifs">
+    <h2><span class="num">4</span> Régler tes objectifs</h2>
+    <p>Dans l'onglet <strong>Réglages</strong> du panneau (le suivi doit être actif pour identifier le document ouvert).
+      Les objectifs sont <strong>propres à chaque document</strong> :</p>
+    <ul>
+      <li><strong>Quotidien (mots)</strong> — ta cible d'écriture par jour.</li>
+      <li><strong>Hebdo (mots)</strong> — ta cible sur la semaine.</li>
+      <li><strong>Total du document (mots)</strong> — la longueur visée du projet (barre d'avancement).</li>
+      <li><strong>Échéance (deadline)</strong> — une date butoir ; l'onglet Document affiche les jours restants.</li>
+      <li><strong>Thème des paliers</strong> — change les emojis et noms des paliers affichés sur l'onglet Document.</li>
+    </ul>
+    <p>Tout en bas, <strong>« Réinitialiser l'historique »</strong> efface tes statistiques locales et tes objectifs.
+      <strong>Sans effet sur tes fichiers Word.</strong></p>
+  </section>
+
+  <section class="card" id="dashboard">
+    <h2><span class="num">5</span> Ton tableau de bord web</h2>
+    <p>Le tableau de bord est un site qui affiche tes statistiques. <strong>Plus besoin d'exporter/importer un
+      fichier</strong> : connecte-toi avec le <strong>même compte</strong> que dans Word, tes données sont déjà là.</p>
+    <p>👉 <strong>Lien à mettre en favori :</strong>
+      <a class="btn" href="https://guinpin022.github.io/writeflow-poc/dashboard/" target="_blank" rel="noopener">Ouvrir le tableau de bord</a></p>
+    <p>Connecte-toi (mêmes email + mot de passe que l'add-in). Quatre onglets :</p>
+    <ul class="tablist">
+      <li><b>Vue d'ensemble</b> — objectif du jour, séries (streaks), record, badges et paliers. Un sélecteur
+        en haut permet de voir <strong>un document précis</strong> ou <strong>tous les documents</strong>.</li>
+      <li><b>Tableau</b> — l'historique jour par jour, avec un <strong>filtre de dates</strong> (laisse les
+        deux champs vides pour tout voir).</li>
+      <li><b>Paramètres</b> — voir ci-dessous.</li>
+      <li><b>Profil</b> — ton profil public (étape 6).</li>
+    </ul>
+
+    <h3>Onglet Paramètres</h3>
+    <ul>
+      <li><strong>Heure de bascule de journée</strong> — l'heure à laquelle un nouveau jour d'écriture commence
+        (ex. « 04 h » : ce que tu écris après minuit et avant 4 h compte sur la veille). <strong>Non rétroactif</strong>,
+        et s'applique aussi dans Word après rechargement.</li>
+      <li><strong>Réglages par document</strong> — mêmes objectifs que dans Word (quotidien, hebdo, total, échéance,
+        thème), plus : définir un <strong>document par défaut</strong>, <strong>masquer</strong> un document,
+        <strong>importer</strong> un historique CSV, <strong>exporter</strong> un document en CSV,
+        <strong>fusionner</strong> deux documents ou en <strong>supprimer</strong> un.</li>
+      <li><strong>Importer un historique (nouveau document)</strong> — pour ajouter un projet que tu ne suis pas
+        dans Word (archive) à partir d'un fichier CSV.</li>
+    </ul>
+    <blockquote>Le tableau de bord se met à jour tout seul quand tu écris dans Word (avec le suivi actif et un compte).
+      Si rien n'apparaît, vérifie que tu es <strong>connecté au même compte</strong> des deux côtés.</blockquote>
+  </section>
+
+  <section class="card" id="profil">
+    <h2><span class="num">6</span> Profil public <span class="badge">optionnel</span></h2>
+    <p>Dans l'onglet <strong>Profil</strong>, tu peux te créer une page publique façon « Strava de l'écriture »
+      pour partager ta progression — <strong>désactivée par défaut</strong>.</p>
+    <ol>
+      <li>Choisis un <strong>pseudo</strong> (3 à 30 caractères), puis éventuellement un nom affiché et une bio.</li>
+      <li>Active <strong>Profil public</strong> : un <strong>lien partageable</strong> apparaît
+        (de la forme <code>…/dashboard/#/u/ton-pseudo</code>) — copie-le ou ouvre-le.</li>
+      <li>Choisis <strong>carte par carte</strong> ce qui est visible : aujourd'hui, X derniers jours, semaine,
+        graphe, séries, meilleur jour, paliers, avancement du projet. Pour chaque carte : <strong>Masqué</strong>,
+        <strong>Mots</strong> (l'effort sans dévoiler ton objectif) ou <strong>Complet</strong> (avec l'objectif).</li>
+    </ol>
+    <p>Tant que ton profil est privé, <strong>personne ne voit rien</strong>. Tu peux aussi autoriser (ou non)
+      les visiteurs à voir le détail d'un document précis.</p>
+  </section>
+
+  <section class="card" id="maj">
+    <h2><span class="num">7</span> Mises à jour</h2>
+    <p>Quand une nouvelle version du tableau de bord est publiée, <strong>l'adresse ne change pas</strong> :
+      recharge simplement la page (<strong>Ctrl + F5</strong> sur PC, <strong>Cmd + Maj + R</strong> sur Mac)
+      pour avoir la dernière version.</p>
+  </section>
+
+  <section class="card" id="probleme">
+    <h2><span class="num">8</span> Remonter un problème</h2>
+    <ul>
+      <li>Note ce que tu faisais, ta plateforme (Web / Mac / Windows) et, si tu peux, exporte le CSV du document
+        concerné depuis l'onglet <strong>Paramètres</strong> du tableau de bord.</li>
+      <li>Envoie le tout à <a href="mailto:cyril.piemontesi@outlook.com">cyril.piemontesi@outlook.com</a>.</li>
+    </ul>
+  </section>
+
+  <footer>Bon test, et bonne écriture ✍️</footer>
+
+</div>
+</body>
+</html>
