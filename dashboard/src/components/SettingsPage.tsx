@@ -10,6 +10,7 @@ import {
   setDocHidden,
   setDocPublicHidden,
   setDocPublicTitle,
+  setDocPublicUrl,
   setDefaultDoc,
   deleteDoc,
   mergeDocs,
@@ -372,6 +373,18 @@ function DocCard({
             onBlur={(e) => {
               const v = e.target.value.trim();
               if (v !== (doc.publicTitle ?? "")) run(() => setDocPublicTitle(userId, doc, v));
+            }}
+          />
+        </label>
+        <label>
+          Lien de l'ouvrage
+          <input
+            type="url"
+            defaultValue={doc.publicUrl ?? ""}
+            placeholder="https:// (où le lire / l'acheter)"
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v !== (doc.publicUrl ?? "")) run(() => setDocPublicUrl(userId, doc, v));
             }}
           />
         </label>

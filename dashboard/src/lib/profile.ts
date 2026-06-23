@@ -105,7 +105,27 @@ export function prefsShowsDailyGoal(p: PublicPrefs): boolean {
   );
 }
 
-export interface Profile {
+/** Liens sociaux + email de contact (tous optionnels). Cles = colonnes `profiles`. */
+export interface Socials {
+  website: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  wattpad: string | null;
+  twitter: string | null;
+  tiktok: string | null;
+  contact_email: string | null; // email PUBLIC, distinct de l'email de connexion
+}
+export const SOCIAL_KEYS: (keyof Socials)[] = [
+  "website",
+  "facebook",
+  "instagram",
+  "wattpad",
+  "twitter",
+  "tiktok",
+  "contact_email",
+];
+
+export interface Profile extends Socials {
   user_id: string;
   username: string;
   display_name: string | null;
@@ -117,7 +137,7 @@ export interface Profile {
 }
 
 const PROFILE_COLS =
-  "user_id, username, display_name, bio, is_public, show_excerpts, allow_doc_view, public_prefs";
+  "user_id, username, display_name, bio, is_public, show_excerpts, allow_doc_view, public_prefs, website, facebook, instagram, wattpad, twitter, tiktok, contact_email";
 
 /** Convertit une ligne brute Supabase en Profile (normalise public_prefs). */
 function rowToProfile(data: Record<string, unknown>): Profile {
@@ -135,7 +155,7 @@ export async function loadMyProfile(userId: string): Promise<Profile | null> {
   return data ? rowToProfile(data) : null;
 }
 
-export interface ProfilePatch {
+export interface ProfilePatch extends Socials {
   username: string;
   display_name: string | null;
   bio: string | null;
@@ -195,6 +215,7 @@ export async function loadPublicDays(username: string): Promise<PublicDay[]> {
 export interface PublicDocDay {
   doc_id: string;
   public_title: string;
+  public_url: string | null; // lien public de l'ouvrage (null si non renseigne)
   theme: string;
   day: string;
   productive: number;
@@ -210,7 +231,7 @@ export interface PublicDocDay {
 export async function loadPublicDocDays(username: string): Promise<PublicDocDay[]> {
   const { data, error } = await supabase
     .from("public_doc_day_stats")
-    .select("doc_id, public_title, theme, day, productive, net, goal")
+    .select("doc_id, public_title, public_url, theme, day, productive, net, goal")
     .eq("username", username);
   if (error) throw error;
   return (data as PublicDocDay[]) ?? [];

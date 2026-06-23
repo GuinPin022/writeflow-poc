@@ -9,6 +9,16 @@
 
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import type { IconType } from "react-icons";
+import {
+  FaGlobe,
+  FaEnvelope,
+  FaInstagram,
+  FaTiktok,
+  FaXTwitter,
+  FaFacebookF,
+} from "react-icons/fa6";
+import { SiWattpad } from "react-icons/si";
 import {
   loadPublicProfile,
   loadPublicDays,
@@ -17,6 +27,7 @@ import {
   loadPublicProjectDocs,
   PublicProject,
   PublicPrefs,
+  Socials,
   CardMode,
   DEFAULT_PREFS,
 } from "../lib/profile";
@@ -47,7 +58,50 @@ type State = "loading" | "missing" | "ok";
 interface DocEntry {
   id: string;
   title: string;
+  url: string | null; // lien public de l'ouvrage (null = aucun)
   model: DocModel;
+}
+
+/* ---------- Réseaux sociaux : libellé, icône (marque) et construction du lien ---------- */
+const SOCIAL_META: Record<keyof Socials, { label: string; Icon: IconType }> = {
+  website: { label: "Site internet", Icon: FaGlobe },
+  contact_email: { label: "Email", Icon: FaEnvelope },
+  instagram: { label: "Instagram", Icon: FaInstagram },
+  tiktok: { label: "TikTok", Icon: FaTiktok },
+  twitter: { label: "Twitter / X", Icon: FaXTwitter },
+  facebook: { label: "Facebook", Icon: FaFacebookF },
+  wattpad: { label: "Wattpad", Icon: SiWattpad },
+};
+const SOCIAL_ORDER: (keyof Socials)[] = [
+  "website",
+  "instagram",
+  "tiktok",
+  "twitter",
+  "facebook",
+  "wattpad",
+  "contact_email",
+];
+
+/** Construit une URL cliquable depuis une valeur libre (lien complet ou pseudo). */
+function socialHref(key: keyof Socials, val: string): string {
+  const v = val.trim();
+  if (key === "contact_email") return `mailto:${v}`;
+  if (/^https?:\/\//i.test(v)) return v;
+  const handle = v.replace(/^@/, "");
+  switch (key) {
+    case "instagram":
+      return `https://instagram.com/${handle}`;
+    case "tiktok":
+      return `https://tiktok.com/@${handle}`;
+    case "twitter":
+      return `https://x.com/${handle}`;
+    case "facebook":
+      return `https://facebook.com/${handle}`;
+    case "wattpad":
+      return `https://wattpad.com/user/${handle}`;
+    default:
+      return `https://${v}`;
+  }
 }
 
 interface Row {
@@ -78,8 +132,10 @@ function makeModel(name: string, theme: string, rows: Row[]): DocModel {
 export default function PublicProfile() {
   const { username } = useParams();
   const [state, setState] = useState<State>("loading");
+  const [tab, setTab] = useState<"stat" | "profil">("profil");
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [socials, setSocials] = useState<Socials | null>(null);
   const [prefs, setPrefs] = useState<PublicPrefs>(DEFAULT_PREFS);
   const [aggModel, setAggModel] = useState<DocModel | null>(null);
   const [docs, setDocs] = useState<DocEntry[]>([]);
@@ -102,6 +158,15 @@ export default function PublicProfile() {
       }
       setName(prof.display_name || prof.username);
       setBio(prof.bio || "");
+      setSocials({
+        website: prof.website,
+        facebook: prof.facebook,
+        instagram: prof.instagram,
+        wattpad: prof.wattpad,
+        twitter: prof.twitter,
+        tiktok: prof.tiktok,
+        contact_email: prof.contact_email,
+      });
       setPrefs(prof.public_prefs);
 
       const p = prof.public_prefs;
@@ -126,11 +191,11 @@ export default function PublicProfile() {
       );
 
       if (wantsDoc) {
-        const byDoc = new Map<string, { title: string; theme: string; rows: Row[] }>();
+        const byDoc = new Map<string, { title: string; url: string | null; theme: string; rows: Row[] }>();
         for (const r of docDays) {
           let e = byDoc.get(r.doc_id);
           if (!e) {
-            e = { title: r.public_title, theme: r.theme || DEFAULT_THEME, rows: [] };
+            e = { title: r.public_title, url: r.public_url, theme: r.theme || DEFAULT_THEME, rows: [] };
             byDoc.set(r.doc_id, e);
           }
           e.rows.push({ day: r.day, prod: r.productive, net: r.net, goal: r.goal ?? 0 });
@@ -138,6 +203,7 @@ export default function PublicProfile() {
         const list: DocEntry[] = [...byDoc.entries()].map(([id, e]) => ({
           id,
           title: e.title,
+          url: e.url,
           model: makeModel(e.title, e.theme, e.rows),
         }));
         list.sort((a, b) => a.title.localeCompare(b.title));
@@ -291,6 +357,70 @@ export default function PublicProfile() {
     ),
   ].filter(Boolean);
 
+  const socialItems = socials
+    ? SOCIAL_ORDER.filter((k) => (socials[k] ?? "").trim() !== "")
+    : [];
+
+  // Un ouvrage AVEC lien = disponible (publié) ; sans lien = en cours d'écriture.
+  const worksAvailable = docs.filter((d) => d.url);
+  const worksInProgress = docs.filter((d) => !d.url);
+
+  const renderWork = (d: DocEntry) => {
+    const proj = docProj[d.id];
+    const showBar = !!proj && proj.pct != null;
+    const full = !!proj && proj.cur != null && proj.tgt != null;
+    return (
+      <div className="card work" key={d.id}>
+        <div className="work-head">
+          {d.url ? (
+            <a
+              className="work-title is-link"
+              href={d.url}
+              target="_blank"
+              rel="noreferrer"
+              title="Ouvrir l'ouvrage"
+            >
+              {d.title} <span className="work-ext">↗</span>
+            </a>
+          ) : (
+            <span className="work-title">{d.title}</span>
+          )}
+          {showBar && <span className="work-pct">{proj!.pct}%</span>}
+        </div>
+        {showBar && (
+          <>
+            <div className="track">
+              <div
+                className="fill"
+                style={{ width: Math.min(100, Math.max(0, proj!.pct as number)) + "%" }}
+              />
+            </div>
+            {full && (
+              <div className="work-meta">
+                {fmt(proj!.cur as number)} / {fmt(proj!.tgt as number)} mots
+              </div>
+            )}
+            {full &&
+              proj!.deadline &&
+              (() => {
+                const dl = deadlineLine(
+                  proj!.deadline,
+                  proj!.cur as number,
+                  proj!.tgt as number,
+                  netSpeed30([d.model], "all")
+                );
+                return dl ? (
+                  <div className="eta" style={{ color: dl.color, fontWeight: 600 }}>
+                    {dl.txt}
+                  </div>
+                ) : null;
+              })()}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="wrap">
       <header className="top">
@@ -298,42 +428,105 @@ export default function PublicProfile() {
           <div className="logo">{(name[0] || "?").toUpperCase()}</div>
           <div>
             <b>{name}</b>
-            <span className="tag">{bio || "Profil Stravwords"}</span>
+            {username && <span className="tag">@{username}</span>}
           </div>
         </div>
       </header>
 
-      {docs.length > 0 && (
-        <div className="docbar">
-          <label htmlFor="pub-doc">Voir :</label>
-          <select id="pub-doc" value={sel} onChange={(e) => setSel(e.target.value)}>
-            <option value="all">Tous les documents</option>
-            {docs.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.title}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="pub-tabs">
+        <button className={tab === "profil" ? "active" : ""} onClick={() => setTab("profil")}>
+          Profil
+        </button>
+        <button className={tab === "stat" ? "active" : ""} onClick={() => setTab("stat")}>
+          Stats
+        </button>
+      </div>
+
+      {tab === "stat" && (
+        <>
+          {docs.length > 0 && (
+            <div className="docbar">
+              <label htmlFor="pub-doc">Voir :</label>
+              <select id="pub-doc" value={sel} onChange={(e) => setSel(e.target.value)}>
+                <option value="all">Tous les documents</option>
+                {docs.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {topCards.length > 0 && (
+            <div className="grid row-4" style={{ marginBottom: 14 }}>
+              {topCards}
+            </div>
+          )}
+
+          {statCards.length > 0 && (
+            <div className="grid row-3" style={{ marginBottom: 14 }}>
+              {statCards}
+            </div>
+          )}
+
+          {prefs.chart !== "hidden" && (
+            <Chart14 models={models} sel={s} showGoal={prefs.chart === "full"} />
+          )}
+
+          {prefs.paliers && <BadgeCalendar models={models} sel={s} />}
+        </>
       )}
 
-      {topCards.length > 0 && (
-        <div className="grid row-4" style={{ marginBottom: 14 }}>
-          {topCards}
-        </div>
-      )}
+      {tab === "profil" && (
+        <>
+          {bio && (
+            <div className="card">
+              <p style={{ margin: 0 }}>{bio}</p>
+            </div>
+          )}
 
-      {statCards.length > 0 && (
-        <div className="grid row-3" style={{ marginBottom: 14 }}>
-          {statCards}
-        </div>
-      )}
+          {socialItems.length > 0 && (
+            <div className="social-row">
+              {socialItems.map((k) => {
+                const val = (socials![k] as string).trim();
+                const { label, Icon } = SOCIAL_META[k];
+                return (
+                  <a
+                    key={k}
+                    className="social-link"
+                    href={socialHref(k, val)}
+                    title={label}
+                    aria-label={label}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Icon />
+                  </a>
+                );
+              })}
+            </div>
+          )}
 
-      {prefs.chart !== "hidden" && (
-        <Chart14 models={models} sel={s} showGoal={prefs.chart === "full"} />
-      )}
+          {worksAvailable.length > 0 && (
+            <>
+              <h2 className="works-title">Ouvrages disponibles</h2>
+              {worksAvailable.map(renderWork)}
+            </>
+          )}
 
-      {prefs.paliers && <BadgeCalendar models={models} sel={s} />}
+          {worksInProgress.length > 0 && (
+            <>
+              <h2 className="works-title">Ouvrages en cours</h2>
+              {worksInProgress.map(renderWork)}
+            </>
+          )}
+
+          {!bio && socialItems.length === 0 && docs.length === 0 && (
+            <div className="center-note">Ce profil n'a pas encore ajouté d'informations.</div>
+          )}
+        </>
+      )}
 
       <div style={{ textAlign: "center", margin: "18px 0", opacity: 0.6 }}>
         Propulsé par <b>Stravwords</b>

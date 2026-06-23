@@ -20,6 +20,7 @@ export interface DocModel {
   hidden: boolean; // masque : exclu du selecteur et de l'agregat "Tous" (MON dashboard)
   publicHidden: boolean; // retire de MON profil public (independant de hidden)
   publicTitle?: string; // titre affiche publiquement (absent = non partage individuellement)
+  publicUrl?: string; // lien public ou l'ouvrage est disponible (absent = aucun)
   isDefault: boolean; // document charge par defaut au demarrage du dashboard
   days: Record<string, DayData>;
 }
@@ -72,7 +73,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     supabase
       .from("documents")
       .select(
-        "doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme, hidden, public_hidden, public_title, is_default"
+        "doc_id, doc_name, daily_goal, weekly_goal, target, deadline, word_count, theme, hidden, public_hidden, public_title, public_url, is_default"
       )
       .eq("user_id", userId),
     supabase
@@ -120,6 +121,7 @@ export async function loadModels(userId: string): Promise<DocModel[]> {
     d.hidden = !!r.hidden;
     d.publicHidden = !!r.public_hidden;
     d.publicTitle = r.public_title || undefined;
+    d.publicUrl = r.public_url || undefined;
     d.isDefault = !!r.is_default;
   }
 
@@ -275,6 +277,24 @@ export async function setDocPublicTitle(
       doc_id: doc.id,
       doc_name: doc.name,
       public_title: title.trim() || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,doc_id" }
+  );
+  if (error) throw error;
+}
+
+/**
+ * Definit le LIEN PUBLIC d'un ouvrage (vide = retire le lien). Upsert partiel :
+ * ne touche que public_url.
+ */
+export async function setDocPublicUrl(userId: string, doc: DocModel, url: string): Promise<void> {
+  const { error } = await supabase.from("documents").upsert(
+    {
+      user_id: userId,
+      doc_id: doc.id,
+      doc_name: doc.name,
+      public_url: url.trim() || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,doc_id" }

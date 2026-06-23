@@ -13,12 +13,37 @@ import {
   saveMyProfile,
   DEFAULT_PREFS,
   PublicPrefs,
+  ProfilePatch,
+  Socials,
   CardMode,
   DonutMode,
 } from "../lib/profile";
 
 const USERNAME_RE = /^[a-z0-9_-]{3,30}$/;
+// Champs editables inline : identite + reseaux sociaux (memes UX par-ligne).
 type Field = "username" | "display_name" | "bio";
+type EditKey = Field | keyof Socials;
+
+const EMPTY_SOCIALS: Socials = {
+  website: null,
+  facebook: null,
+  instagram: null,
+  wattpad: null,
+  twitter: null,
+  tiktok: null,
+  contact_email: null,
+};
+
+// Lignes de la carte « Réseaux & contact » : clé, libellé, indice de saisie.
+const SOCIAL_ROWS: { key: keyof Socials; label: string; placeholder: string }[] = [
+  { key: "website", label: "Site internet", placeholder: "https://mon-site.com" },
+  { key: "contact_email", label: "Email de contact", placeholder: "contact@exemple.com (public)" },
+  { key: "instagram", label: "Instagram", placeholder: "@pseudo ou lien" },
+  { key: "tiktok", label: "TikTok", placeholder: "@pseudo ou lien" },
+  { key: "twitter", label: "Twitter / X", placeholder: "@pseudo ou lien" },
+  { key: "facebook", label: "Facebook", placeholder: "https://facebook.com/…" },
+  { key: "wattpad", label: "Wattpad", placeholder: "https://wattpad.com/user/…" },
+];
 
 // Cartes "periode" + graphe : tri-state masque / mots / complet.
 type CardKey = "today" | "recent" | "week" | "chart";
@@ -44,12 +69,13 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
+  const [socials, setSocials] = useState<Socials>(EMPTY_SOCIALS);
   const [isPublic, setIsPublic] = useState(false);
   const [allowDocView, setAllowDocView] = useState(false);
   const [prefs, setPrefs] = useState<PublicPrefs>(DEFAULT_PREFS);
 
   const [loaded, setLoaded] = useState(false);
-  const [editing, setEditing] = useState<Field | null>(null);
+  const [editing, setEditing] = useState<EditKey | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -62,6 +88,15 @@ export default function ProfilePage() {
           setUsername(p.username);
           setDisplayName(p.display_name || "");
           setBio(p.bio || "");
+          setSocials({
+            website: p.website,
+            facebook: p.facebook,
+            instagram: p.instagram,
+            wattpad: p.wattpad,
+            twitter: p.twitter,
+            tiktok: p.tiktok,
+            contact_email: p.contact_email,
+          });
           setIsPublic(p.is_public);
           setAllowDocView(p.allow_doc_view);
           setPrefs(p.public_prefs);
@@ -81,29 +116,29 @@ export default function ProfilePage() {
   const hasUsername = USERNAME_RE.test(username);
   const shareUrl = `${location.href.split("#")[0]}#/u/${username}`;
 
-  function startEdit(f: Field) {
+  function currentValue(f: EditKey): string {
+    if (f === "username") return username;
+    if (f === "display_name") return displayName;
+    if (f === "bio") return bio;
+    return socials[f] ?? "";
+  }
+  function startEdit(f: EditKey) {
     setErr(null);
     setEditing(f);
-    setDraft(f === "username" ? username : f === "display_name" ? displayName : bio);
+    setDraft(currentValue(f));
   }
   function cancelEdit() {
     setEditing(null);
     setErr(null);
   }
 
-  async function persist(next: {
-    username: string;
-    display_name: string | null;
-    bio: string | null;
-    is_public: boolean;
-    allow_doc_view: boolean;
-    public_prefs: PublicPrefs;
-  }) {
+  async function persist(next: ProfilePatch) {
     await saveMyProfile(userId, next);
   }
 
-  // Champs identite courants, pour les upserts qui ne changent qu'un reglage.
-  function baseFields() {
+  // Champs courants (identite + reseaux + visibilite), pour les upserts qui ne
+  // changent qu'un seul reglage sans ecraser les autres.
+  function baseFields(): ProfilePatch {
     return {
       username,
       display_name: displayName || null,
@@ -111,6 +146,7 @@ export default function ProfilePage() {
       is_public: isPublic,
       allow_doc_view: allowDocView,
       public_prefs: prefs,
+      ...socials,
     };
   }
 
@@ -133,40 +169,35 @@ export default function ProfilePage() {
   const setRecentN = (n: number) =>
     savePrefs({ ...prefs, recentN: Math.min(7, Math.max(1, n)) });
 
-  async function saveField(f: Field) {
+  async function saveField(f: EditKey) {
     setErr(null);
-    let nextUsername = username;
-    let nextDisplay = displayName;
-    let nextBio = bio;
+    const val = draft.trim();
+    const patch = baseFields(); // part de l'etat courant, on n'ecrase que le champ edite
     if (f === "username") {
-      const u = draft.trim().toLowerCase();
+      const u = val.toLowerCase();
       if (!USERNAME_RE.test(u)) {
         setErr("Pseudo invalide : 3 à 30 caractères, en minuscules, chiffres, « - » ou « _ ».");
         return;
       }
-      nextUsername = u;
+      patch.username = u;
     } else if (f === "display_name") {
-      nextDisplay = draft.trim();
+      patch.display_name = val || null;
+    } else if (f === "bio") {
+      patch.bio = val || null;
     } else {
-      nextBio = draft.trim();
+      patch[f] = val || null; // reseau social
     }
-    if (!USERNAME_RE.test(nextUsername)) {
+    if (!USERNAME_RE.test(patch.username)) {
       setErr("Définis d'abord ton pseudo.");
       return;
     }
     setBusy(true);
     try {
-      await persist({
-        username: nextUsername,
-        display_name: nextDisplay || null,
-        bio: nextBio || null,
-        is_public: isPublic,
-        allow_doc_view: allowDocView,
-        public_prefs: prefs,
-      });
-      setUsername(nextUsername);
-      setDisplayName(nextDisplay);
-      setBio(nextBio);
+      await persist(patch);
+      if (f === "username") setUsername(patch.username);
+      else if (f === "display_name") setDisplayName(val);
+      else if (f === "bio") setBio(val);
+      else setSocials((s) => ({ ...s, [f]: val || null }));
       setEditing(null);
     } catch (e: unknown) {
       const code = (e as { code?: string })?.code;
@@ -221,7 +252,7 @@ export default function ProfilePage() {
   }
 
   function row(
-    f: Field,
+    f: EditKey,
     label: string,
     value: string,
     opts?: { multiline?: boolean; placeholder?: string; hint?: string }
@@ -312,6 +343,19 @@ export default function ProfilePage() {
       {!hasUsername && (
         <p className="prof-note">Commence par définir ton pseudo pour activer le reste.</p>
       )}
+
+      <div className="card prof-rows">
+        <div className="prof-row">
+          <span className="prof-label">Réseaux &amp; contact</span>
+          <span className="prof-value prof-empty">
+            Optionnels. Affichés sous l'onglet « Profil » de ta page publique. L'email de contact
+            est public et distinct de ton email de connexion.
+          </span>
+        </div>
+        {SOCIAL_ROWS.map((s) =>
+          row(s.key, s.label, socials[s.key] ?? "", { placeholder: s.placeholder })
+        )}
+      </div>
 
       <div className="card prof-rows">
         <div className="prof-row">

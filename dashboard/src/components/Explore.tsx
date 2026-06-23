@@ -19,39 +19,24 @@ export default function Explore() {
   if (err) return <div className="center-note">Erreur : {err}</div>;
   if (!list) return <div className="center-note">Chargement…</div>;
 
-  return (
-    <div>
-      <h2 style={{ margin: "4px 0 14px" }}>
-        Profils publics <span className="meta">{list.length}</span>
-      </h2>
+  if (list.length === 0)
+    return <div className="empty-note">Aucun profil public pour le moment.</div>;
 
-      {list.length === 0 ? (
-        <div className="empty-note">Aucun profil public pour le moment.</div>
-      ) : (
-        <div className="grid row-3">
-          {list.map((p) => (
-            <Link
-              key={p.username}
-              to={`/u/${p.username}`}
-              className="card"
-              style={{ textDecoration: "none", display: "block" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="av">
-                  {((p.display_name || p.username)[0] || "?").toUpperCase()}
-                </span>
-                <b>{p.display_name || p.username}</b>
-              </div>
-              <div className="sub">@{p.username}</div>
-              {p.bio && (
-                <div className="sub" style={{ marginTop: 6 }}>
-                  {p.bio}
-                </div>
-              )}
-            </Link>
-          ))}
-        </div>
-      )}
+  return (
+    <div className="explore-list">
+      {list.map((p) => (
+        <Link key={p.username} to={`/u/${p.username}`} className="card explore-card">
+          <span className="explore-av">
+            {((p.display_name || p.username)[0] || "?").toUpperCase()}
+          </span>
+          <div className="explore-body">
+            <div className="explore-name">{p.display_name || p.username}</div>
+            <div className="explore-handle">@{p.username}</div>
+            {p.bio && <div className="explore-bio">{p.bio}</div>}
+          </div>
+          <span className="explore-arrow">→</span>
+        </Link>
+      ))}
     </div>
   );
 }

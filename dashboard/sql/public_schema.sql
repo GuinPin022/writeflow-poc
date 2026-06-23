@@ -37,6 +37,16 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists allow_doc_view boolean not null default false;
 alter table public.profiles add column if not exists public_prefs  jsonb   not null default '{}'::jsonb;
 
+-- Reseaux sociaux + email de contact (tous optionnels, public_email != email de connexion).
+-- Lisibles publiquement via la policy de SELECT (is_public = true) — pas de vue dediee.
+alter table public.profiles add column if not exists website       text;
+alter table public.profiles add column if not exists facebook      text;
+alter table public.profiles add column if not exists instagram     text;
+alter table public.profiles add column if not exists wattpad       text;
+alter table public.profiles add column if not exists twitter       text;
+alter table public.profiles add column if not exists tiktok        text;
+alter table public.profiles add column if not exists contact_email text;
+
 -- Pseudo : minuscules, chiffres, tiret/underscore, 3 a 30 caracteres.
 do $$
 begin
@@ -71,6 +81,8 @@ create policy "profiles_update_own"
 -- ===========================================================================
 alter table public.documents add column if not exists public_hidden boolean not null default false;
 alter table public.documents add column if not exists public_title  text;
+-- Lien public ou l'ouvrage est disponible (boutique, Wattpad, site perso...).
+alter table public.documents add column if not exists public_url    text;
 
 
 -- ===========================================================================
@@ -174,6 +186,7 @@ select
   p.username,
   s.doc_id,
   d.public_title,
+  d.public_url,
   d.theme,
   s.day,
   s.productive::int as productive,
