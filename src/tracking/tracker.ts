@@ -169,6 +169,53 @@ export class WriteFlowTracker {
     });
   }
 
+  /**
+   * Retire les passages marques comme NOTES avant tout comptage.
+   * Convention B1 : le texte entre marqueurs (meme sur plusieurs lignes) n'est pas
+   * compte. On remplace par une espace pour ne pas coller les mots voisins.
+   *
+   * Deux temps :
+   *  1) on retire toutes les paires FERMEES (NOTE_PATTERNS).
+   *  2) pour les marqueurs RARES (SAFE_OPENERS), on masque aussi un ouvreur NON
+   *     ferme jusqu'a la fin du texte : ainsi une note en cours de frappe ne compte
+   *     jamais, meme transitoirement. Sans ca, les mots comptes le temps d'ouvrir la
+   *     note gonflent le compteur "productif" (qui, contrairement au net, ne rembourse
+   *     jamais un delta negatif). Reserve aux marqueurs rares : un simple "#" ou "//"
+   *     egare masquerait tout le reste du document.
+   */
+  static stripNotes(text: string): string {
+    if (!text) return text;
+    let out = text;
+    // 0) Note "ligne entiere" : toute ligne commencant par // (sans fermeture,
+    //    bornee par la fin de ligne). Sur -> les URL commencent par http://... donc
+    //    le // n'y est jamais en debut de ligne.
+    out = out.replace(WriteFlowTracker.NOTE_LINE, " ");
+    // 1) Paires fermees. 2) Ouvreur non ferme masque jusqu'a la fin (note en cours
+    //    de frappe -> jamais comptee, meme transitoirement, donc le "productif" ne
+    //    gonfle pas). Reserve a ces marqueurs rares : un caractere frequent egare
+    //    masquerait tout le reste du document.
+    for (const pattern of WriteFlowTracker.NOTE_PAIRS) out = out.replace(pattern, " ");
+    for (const opener of WriteFlowTracker.NOTE_OPENERS) out = out.replace(opener, " ");
+    return out;
+  }
+
+  /** Note "ligne entiere" : une ligne qui COMMENCE par // (apres espaces eventuels). */
+  private static readonly NOTE_LINE = /^[ \t]*\/\/.*$/gm;
+
+  /** Marqueurs de note — paires fermees. Non-greedy : matche la plus petite paire. */
+  private static readonly NOTE_PAIRS: readonly RegExp[] = [
+    /\[\[[\s\S]*?\]\]/g, // [[ ... ]]
+    /\{\{[\s\S]*?\}\}/g, // {{ ... }}
+    /##[\s\S]*?##/g, //    ## ... ##
+  ];
+
+  /** Ouvreurs non fermes : masques jusqu'a la fin du texte (voir stripNotes). */
+  private static readonly NOTE_OPENERS: readonly RegExp[] = [
+    /\[\[[\s\S]*$/, // [[ sans ]]
+    /\{\{[\s\S]*$/, // {{ sans }}
+    /##[\s\S]*$/, //  ## sans ##
+  ];
+
   /** Compte les mots d'un texte. Strategie POC : separation sur espaces/sauts. */
   static countWords(text: string): number {
     if (!text) return 0;
@@ -237,7 +284,8 @@ export class WriteFlowTracker {
       const body = context.document.body;
       body.load("text");
       await context.sync();
-      return WriteFlowTracker.countWords(body.text);
+      // On filtre d'abord les notes ([[ ... ]]) : elles ne comptent pas.
+      return WriteFlowTracker.countWords(WriteFlowTracker.stripNotes(body.text));
     });
     return { wordCount, latencyMs: performance.now() - start };
   }

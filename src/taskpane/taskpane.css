@@ -256,3 +256,6 @@ button.danger:hover { background: #fbeceb; }
 .pl-cell.reached { opacity: 1; }
 .pl-cell.locked { opacity: .28; filter: grayscale(1); }
 .pl-cell.current { background: var(--highlight); }
+
+.note-help { margin-top: 14px; padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+.note-help code { background: var(--highlight); color: var(--fg); border-radius: 3px; padding: 0 4px; font-size: 11px; }

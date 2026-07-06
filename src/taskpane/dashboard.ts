@@ -132,6 +132,13 @@ export function renderDocumentView(
 
       <div class="dash-section-label">Calendrier — 4 semaines (ce document)</div>
       <div class="cal-rows">${calRows}</div>
+
+      <div class="note-help">
+        💡 Notes non comptées : entoure ton texte de
+        <code>[[ ]]</code> <code>{{ }}</code> <code>## ##</code>
+        (à ouvrir <em>et</em> fermer), ou commence une ligne par <code>//</code>
+        (toute la ligne). Ex. <code>[[pense-bête]]</code> ou <code>// à revoir</code>.
+      </div>
     </div>
   `;
 
