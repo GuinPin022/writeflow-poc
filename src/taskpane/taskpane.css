@@ -226,6 +226,8 @@ button.danger:hover { background: #fbeceb; }
 
 /* ---------- Sélecteur de thème (Réglages) ---------- */
 .set-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.set-check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--fg); cursor: pointer; }
+.set-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .setting-select {
   padding: 7px; border: 1px solid var(--border); border-radius: 6px;
   font-size: 14px; width: 100%; background: var(--bg); color: var(--fg);

@@ -45,6 +45,7 @@ export function renderDocumentView(
   opts?: DashboardOpts
 ): void {
   const running = opts?.running ?? false;
+  const hideProd = store.getHideProductive(); // reglage d'affichage (onglet Reglages)
 
   const docId = currentDoc?.id || "";
   const docName = currentDoc?.name || store.getDocName(docId) || "—";
@@ -69,16 +70,21 @@ export function renderDocumentView(
      </div>`;
 
   // Graphe 7 jours : empilement net (Word, conservé) + productif en plus.
+  // Si les mots productifs sont masqués, seul le net est tracé (et l'échelle s'y adapte).
   // Chaque jour porte sa propre ligne d'objectif (celui en vigueur ce jour-là).
-  const scale = Math.max(...seven.map((d) => Math.max(d.prod, d.goal)), 1) * 1.1;
+  const scale =
+    Math.max(...seven.map((d) => Math.max(hideProd ? Math.max(d.net, 0) : d.prod, d.goal)), 1) * 1.1;
   const chartBars = seven
     .map((d) => {
       const keep = Math.max(d.net, 0);
-      const extra = Math.max(d.prod - keep, 0);
+      const extra = hideProd ? 0 : Math.max(d.prod - keep, 0);
       const goalPos = d.goal > 0 ? Math.min(100, (d.goal / scale) * 100) : -1;
       const goalMark =
         goalPos >= 0 ? `<div class="cgoal" style="bottom:${goalPos.toFixed(0)}%"></div>` : "";
-      return `<div class="cbar" title="${d.key} — Word ${d.net}, productif ${d.prod}, objectif ${d.goal}">
+      const tip = hideProd
+        ? `${d.key} — Word ${d.net}, objectif ${d.goal}`
+        : `${d.key} — Word ${d.net}, productif ${d.prod}, objectif ${d.goal}`;
+      return `<div class="cbar" title="${tip}">
         ${goalMark}
         <div class="seg-extra" style="height:${((extra / scale) * 100).toFixed(0)}%"></div>
         <div class="seg-keep" style="height:${((keep / scale) * 100).toFixed(0)}%"></div>
@@ -90,7 +96,10 @@ export function renderDocumentView(
     .map(
       (row) =>
         `<div class="cal-row">${row
-          .map((c) => `<span class="cal-cell lvl-${c.level}" title="${c.key} : ${c.typed}"></span>`)
+          .map(
+            (c) =>
+              `<span class="cal-cell lvl-${c.level}" title="${hideProd ? c.key : `${c.key} : ${c.typed}`}"></span>`
+          )
           .join("")}</div>`
     )
     .join("");
@@ -118,17 +127,17 @@ export function renderDocumentView(
 
       <div class="dash-section-label">Aujourd'hui — ce document</div>
       ${metric("Mots Word", dWord, g.daily, "fill-word")}
-      ${metric("Mots productifs", dProd, g.daily, "fill-prod")}
+      ${hideProd ? "" : metric("Mots productifs", dProd, g.daily, "fill-prod")}
 
       <div class="dash-section-label">7 derniers jours — ce document</div>
       <div class="chart">
         <div class="cbars">${chartBars}</div>
       </div>
-      <div class="legend2"><span><i class="dot seg-keep"></i>Mots Word (net)</span><span><i class="dot seg-extra"></i>Productif en plus</span><span><i class="dot dot-goal"></i>Objectif du jour</span></div>
+      <div class="legend2"><span><i class="dot seg-keep"></i>Mots Word (net)</span>${hideProd ? "" : `<span><i class="dot seg-extra"></i>Productif en plus</span>`}<span><i class="dot dot-goal"></i>Objectif du jour</span></div>
 
       <div class="dash-section-label">Cette semaine — ce document</div>
       ${metric("Mots Word", wWord, g.weekly, "fill-word")}
-      ${metric("Mots productifs", wProd, g.weekly, "fill-prod")}
+      ${hideProd ? "" : metric("Mots productifs", wProd, g.weekly, "fill-prod")}
 
       <div class="dash-section-label">Calendrier — 4 semaines (ce document)</div>
       <div class="cal-rows">${calRows}</div>
@@ -147,6 +156,7 @@ export function renderDocumentView(
 
 /* =================== ONGLET GLOBAL =================== */
 export function renderGlobalView(container: HTMLElement, store: DailyStore): void {
+  const hideProd = store.getHideProductive(); // reglage d'affichage (onglet Reglages)
   const todayTotal = store.getToday();
   const todayNet = store.getTodayNet();
   const week = store.getWeekTotal();
@@ -163,7 +173,10 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
     .map(
       (col) =>
         `<div class="cal-col">${col
-          .map((cell) => `<span class="cal-cell lvl-${cell.level}" title="${cell.key} : ${cell.typed}"></span>`)
+          .map(
+            (cell) =>
+              `<span class="cal-cell lvl-${cell.level}" title="${hideProd ? cell.key : `${cell.key} : ${cell.typed}`}"></span>`
+          )
           .join("")}</div>`
     )
     .join("");
@@ -174,13 +187,13 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
     <div class="dash">
       <div class="dash-section-label">Aujourd'hui — tous documents</div>
       <div class="kpi-row">
-        <div class="kpi"><span class="kpi-v">${todayTotal}</span><span class="kpi-l">productif</span></div>
+        ${hideProd ? "" : `<div class="kpi"><span class="kpi-v">${todayTotal}</span><span class="kpi-l">productif</span></div>`}
         <div class="kpi"><span class="kpi-v">${fmt(todayNet)}</span><span class="kpi-l">net (Word)</span></div>
       </div>
 
       <div class="dash-section-label">Cette semaine — tous documents</div>
       <div class="kpi-row">
-        <div class="kpi"><span class="kpi-v">${week}</span><span class="kpi-l">productif</span></div>
+        ${hideProd ? "" : `<div class="kpi"><span class="kpi-v">${week}</span><span class="kpi-l">productif</span></div>`}
         <div class="kpi"><span class="kpi-v">${fmt(weekNet)}</span><span class="kpi-l">net (Word)</span></div>
       </div>
 
@@ -188,10 +201,14 @@ export function renderGlobalView(container: HTMLElement, store: DailyStore): voi
       <div class="cal">${calHtml}</div>
 
       <div class="dash-section-label">Statistiques</div>
-      <div class="kpi-row">
+      ${
+        hideProd
+          ? "" // record et moyenne sont des compteurs de mots productifs : masques aussi
+          : `<div class="kpi-row">
         <div class="kpi"><span class="kpi-v">${rec.typed || 0}</span><span class="kpi-l">record (${recSub})</span></div>
         <div class="kpi"><span class="kpi-v">${avg}</span><span class="kpi-l">moyenne / jour actif</span></div>
-      </div>
+      </div>`
+      }
       <div class="kpi-row">
         <div class="kpi"><span class="kpi-v">${docs}</span><span class="kpi-l">documents suivis</span></div>
         <div class="kpi"><span class="kpi-v">${activeDays}</span><span class="kpi-l">jours actifs</span></div>
@@ -205,7 +222,7 @@ export function renderSettingsView(
   container: HTMLElement,
   store: DailyStore,
   currentDoc?: { id: string; name: string },
-  onChange?: (kind: "settings" | "docTarget") => void
+  onChange?: (kind: "settings" | "docTarget" | "display") => void
 ): void {
   const docId = currentDoc?.id || "";
   const docName = currentDoc?.name || (docId ? store.getDocName(docId) : "") || "aucun document actif";
@@ -240,6 +257,13 @@ export function renderSettingsView(
       </label>
       <p class="hint">Thème propre à ce document. Change les emojis et les noms des paliers dans l'onglet Document.</p>
 
+      <div class="dash-section-label">Affichage</div>
+      <label class="set-check">
+        <input id="set-hideprod" type="checkbox" ${store.getHideProductive() ? "checked" : ""}>
+        <span>Masquer les mots productifs</span>
+      </label>
+      <p class="hint">N'affiche plus que les mots comptés par Word (net) dans les onglets Document et Global. La mesure continue en arrière-plan : rien n'est perdu, et décocher réaffiche tout.</p>
+
       <div class="dash-section-label">Données</div>
       <div class="actions">
         <button id="set-reset" class="danger">Réinitialiser l'historique</button>
@@ -261,6 +285,11 @@ export function renderSettingsView(
   w?.addEventListener("change", () => commit({ weekly: Math.max(0, parseInt(w.value, 10) || 0) }));
   t?.addEventListener("change", () => commit({ target: Math.max(0, parseInt(t.value, 10) || 0) }));
   dl?.addEventListener("change", () => commit({ deadline: dl.value }));
+  const hp = container.querySelector<HTMLInputElement>("#set-hideprod");
+  hp?.addEventListener("change", () => {
+    store.setHideProductive(hp.checked);
+    onChange?.("display"); // pure preference locale : on rafraichit juste les vues
+  });
   const theme = container.querySelector<HTMLSelectElement>("#set-theme");
   theme?.addEventListener("change", () => {
     if (!docId) return;

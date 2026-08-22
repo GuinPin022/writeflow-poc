@@ -142,7 +142,13 @@ function renderGlobal(): void {
   if (tracker) renderGlobalView($("view-global"), tracker.getDailyStore());
 }
 
-function onSettingsChange(kind: "settings" | "docTarget"): void {
+function onSettingsChange(kind: "settings" | "docTarget" | "display"): void {
+  if (kind === "display") {
+    // Preference d'affichage locale : rien a synchroniser, on redessine les vues.
+    renderDoc();
+    renderGlobal();
+    return;
+  }
   if (!tracker || !supaSession) return; // mode local : rien a remonter
   // Tous les reglages (objectifs + theme) sont par document -> table `documents`.
   // "settings" = reinitialisation locale : rien a pousser.

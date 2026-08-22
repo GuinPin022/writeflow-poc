@@ -19,6 +19,7 @@ import { DEFAULT_THEME } from "./paliers";
 
 const KEY_V2 = "writeflow_v2";
 const KEY_THEME = "writeflow_theme";
+const KEY_HIDE_PROD = "writeflow_hide_prod";
 const LEGACY_DAILY = "writeflow_daily";
 const LEGACY_DETAIL = "writeflow_daily_detail";
 export const HISTORIC_DOC = "(historique)";
@@ -561,6 +562,20 @@ export class DailyStore {
     const d = this.ensureDoc(st, docId);
     d.theme = key;
     this.save(st);
+  }
+
+  /**
+   * Masquer les mots productifs dans les vues Document et Global (preference
+   * d'AFFICHAGE seulement : la mesure continue et rien n'est perdu).
+   * Globale (pas par document) et locale a cet appareil.
+   */
+  getHideProductive(): boolean {
+    return window.localStorage.getItem(KEY_HIDE_PROD) === "1";
+  }
+
+  setHideProductive(hide: boolean): void {
+    if (hide) window.localStorage.setItem(KEY_HIDE_PROD, "1");
+    else window.localStorage.removeItem(KEY_HIDE_PROD);
   }
 
   /** Donnees completes d'un document (pour persistance dans les settings du fichier). */
