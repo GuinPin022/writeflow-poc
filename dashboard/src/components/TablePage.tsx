@@ -25,6 +25,7 @@ export default function TablePage() {
   if (range.from) keys = keys.filter((k) => k >= range.from);
   if (range.to) keys = keys.filter((k) => k <= range.to);
   if (!range.from && !range.to) keys = keys.slice(-60);
+  keys = keys.slice().reverse(); // affichage : plus recent en haut
   const doc = sel === "all" ? null : models.find((d) => d.id === sel)!;
 
   return (
