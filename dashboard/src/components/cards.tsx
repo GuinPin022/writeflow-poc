@@ -72,7 +72,9 @@ export function PeriodBadges({
     return b ? (
       <div className="bd-today">
         <span className="bd-e">{b.e}</span>
-        <span className="bd-n">{b.n}</span>
+        <span className="bd-n" title={b.n}>
+          {b.n}
+        </span>
       </div>
     ) : null;
   }

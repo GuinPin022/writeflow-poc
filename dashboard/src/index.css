@@ -115,9 +115,10 @@ select.mini{padding:3px 7px;font-size:12px;border-radius:7px;box-shadow:none;}
 .stat .sub{font-size:11px;color:var(--hint);margin-top:5px;}
 .ic{font-style:normal;}
 
-.bd-today{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);}
-.bd-today .bd-e{font-size:23px;line-height:1;}
-.bd-today .bd-n{font-size:12px;font-weight:700;}
+.bd-today{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);}
+.bd-today .bd-e{font-size:23px;line-height:1;flex-shrink:0;}
+/* min-width:0 : sans lui un enfant flex refuse de se reduire sous la taille de son texte. */
+.bd-today .bd-n{font-size:12px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bd-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);}
 .bd-row .bd-chip{font-size:17px;line-height:1.2;cursor:default;}
 .bd-row .bd-chip.empty{color:var(--hint);opacity:.4;}

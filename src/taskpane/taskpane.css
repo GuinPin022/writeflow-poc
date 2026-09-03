@@ -241,8 +241,11 @@ button.danger:hover { background: #fbeceb; }
 .pl-cur { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .pl-emo { font-size: 28px; line-height: 1; }
 .pl-lab { font-size: 11px; color: var(--muted); }
-.pl-name { font-size: 16px; font-weight: 700; }
-.pl-pct { margin-left: auto; font-size: 20px; font-weight: 700; }
+/* min-width:0 : sans lui un enfant flex refuse de se reduire sous la taille de son texte. */
+.pl-id { min-width: 0; }
+.pl-name { font-size: 16px; font-weight: 700;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-pct { margin-left: auto; font-size: 20px; font-weight: 700; flex-shrink: 0; }
 .pl-bar { height: 12px; background: var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 7px; }
 .pl-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width .3s; }
 .pl-meta { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
